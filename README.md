@@ -32,6 +32,8 @@ The first command starts `qareel serve` in the background. It owns the browser e
 
 State lives in `~/.qareel` (`QAREEL_HOME` overrides it): the browser profile, recordings, demos and `serve.log`.
 
+Other overrides: `QAREEL_HOST` (engine binary), `QAREEL_REEL_DIR` (polisher folder), `QAREEL_PYTHON` (an interpreter that already has numpy and Pillow), `QAREEL_LINUX_IMAGE` (browser image) and `QAREEL_IDLE_MINUTES`. Tools that embed qareel read `qareel version --json` for its version, engine protocol and Linux image.
+
 ## Development
 
 ```sh

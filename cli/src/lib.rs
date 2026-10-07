@@ -84,6 +84,10 @@ async fn local(command: &str, params: &[String]) -> anyhow::Result<i32> {
             }
             Ok(0)
         }
+        "version" if params.iter().any(|param| param == "--json") => {
+            println!("{}", serde_json::json!({"version": env!("CARGO_PKG_VERSION"), "protocol": 1, "linux_image": engine::default_image()}));
+            Ok(0)
+        }
         "version" => {
             println!("qareel {}", env!("CARGO_PKG_VERSION"));
             Ok(0)

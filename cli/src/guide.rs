@@ -61,6 +61,7 @@ pub fn command_help(command: &str) -> String {
         "doctor" => "qareel doctor\nChecks the browser engine, ffmpeg and Python for the polish step.",
         "install" => "qareel install\nDownloads the Linux browser image (podman), then runs the doctor checks.",
         "stop" => "qareel stop\nStops the background session and its browser.",
+        "version" => "qareel version [--json]\nPrints the version; --json adds the engine protocol and the Linux browser image.",
         _ => return OVERVIEW.to_owned(),
     };
     format!("{body}\n\nRun `qareel guide` for the full QA demo workflow.\n")

@@ -59,6 +59,9 @@ fn tail(bytes: &[u8]) -> String {
 }
 
 pub async fn python(layout: &Layout) -> Result<(PathBuf, Vec<String>)> {
+    if let Some(interpreter) = std::env::var_os("QAREEL_PYTHON").filter(|value| !value.is_empty()) {
+        return Ok((PathBuf::from(interpreter), Vec::new()));
+    }
     if let Some(uv) = find_executable("uv") {
         return Ok((uv, ["run", "--quiet", "--no-project", "--with", "numpy", "--with", "pillow>=9.5", "python"].map(String::from).to_vec()));
     }
