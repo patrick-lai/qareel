@@ -7,8 +7,7 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .executable(name: "qareel-host", targets: ["QareelHost"]),
-        .library(name: "QareelEngine", type: .dynamic, targets: ["QareelEngine"])
+        .executable(name: "qareel-host", targets: ["QareelHost"])
     ],
     targets: [
         .target(

@@ -11,7 +11,6 @@ public enum EngineChannel {
 
 @MainActor
 public final class QareelEngine {
-    nonisolated public static let abi: Int32 = 1
     nonisolated public static let version: StaticString = "0.2.0"
     static let operations = ["core", "snapshot", "evaluate", "reference_input", "screenshot", "automation", "console", "recording_video", "pointer_tap", "pointer_input", "dialog", "key_input", "wheel_input", "frames"]
 

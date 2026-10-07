@@ -154,7 +154,6 @@ jobs:
           scripts/macos-sign.sh
           dist/stage/${{ matrix.platform }}/qareel/bin/qareel
           dist/stage/${{ matrix.platform }}/qareel/libexec/qareel-host
-          dist/stage/${{ matrix.platform }}/qareel/lib/libQareelEngine.dylib
       - run: scripts/build-dist.sh --target ${{ matrix.target }} --package-only
       - uses: actions/upload-artifact@v7
         with:

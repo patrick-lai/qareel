@@ -99,13 +99,9 @@ if [ "$build" -eq 1 ]; then
     if [ "$os" = darwin ]; then
         set -- -c release --package-path "$root/host-macos" --arch "$swift_arch"
         swift build "$@"
-        products="$(swift build "$@" --show-bin-path)"
-        host="$products/qareel-host"
-        engine="$products/libQareelEngine.dylib"
+        host="$(swift build "$@" --show-bin-path)/qareel-host"
         [ -x "$host" ] || fail "swift build did not produce $host."
-        [ -f "$engine" ] || fail "swift build did not produce $engine."
         lipo "$host" -verify_arch "$swift_arch" || fail "$host is not built for $swift_arch."
-        lipo "$engine" -verify_arch "$swift_arch" || fail "$engine is not built for $swift_arch."
     fi
 
     for file in reel.py reel_sound.py reel_assets; do
@@ -116,9 +112,8 @@ if [ "$build" -eq 1 ]; then
     mkdir -p "$tree/bin" "$tree/share/qareel/reel"
     cp "$cli" "$tree/bin/qareel"
     if [ "$os" = darwin ]; then
-        mkdir -p "$tree/libexec" "$tree/lib"
+        mkdir -p "$tree/libexec"
         cp "$host" "$tree/libexec/qareel-host"
-        cp "$engine" "$tree/lib/libQareelEngine.dylib"
     fi
     cp "$root/reel/reel.py" "$root/reel/reel_sound.py" "$tree/share/qareel/reel/"
     cp -R "$root/reel/reel_assets" "$tree/share/qareel/reel/reel_assets"
@@ -128,7 +123,7 @@ if [ "$build" -eq 1 ]; then
     find "$tree" -type f -exec chmod 0644 {} +
     chmod 0755 "$tree/bin/qareel"
     if [ "$os" = darwin ]; then
-        chmod 0755 "$tree/libexec/qareel-host" "$tree/lib/libQareelEngine.dylib"
+        chmod 0755 "$tree/libexec/qareel-host"
     fi
     printf 'Assembled %s\n' "$tree"
 fi
@@ -138,7 +133,6 @@ fi
 [ -x "$tree/bin/qareel" ] || fail "missing $tree/bin/qareel; run without --package-only first."
 if [ "$os" = darwin ]; then
     [ -x "$tree/libexec/qareel-host" ] || fail "missing $tree/libexec/qareel-host; run without --package-only first."
-    [ -f "$tree/lib/libQareelEngine.dylib" ] || fail "missing $tree/lib/libQareelEngine.dylib; run without --package-only first."
 fi
 
 pkgid=$(cargo pkgid -p qareel --manifest-path "$root/Cargo.toml")
