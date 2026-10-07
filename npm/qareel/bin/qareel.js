@@ -57,7 +57,7 @@ function findBinary() {
     `the ${key} binary is not installed. npm installs it from the optional package ${platformPackage},`,
     'which is skipped when optional dependencies are omitted (--omit=optional) or the lockfile came from another platform.',
     `Fix: npm install ${platformPackage}@${version}`,
-    `Or for a global install: npm install -g qareel@${version}`,
+    `Or for a global install: npm install -g @patrick-lai/qareel@${version}`,
   ].join('\n'));
 }
 

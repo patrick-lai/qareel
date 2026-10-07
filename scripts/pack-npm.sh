@@ -11,9 +11,9 @@ Usage: scripts/pack-npm.sh [--local]
 Stages the npm packages from dist/qareel-<version>-<platform>.tar.gz into
 dist/npm/ and runs npm pack for each.
 
-  --local  Pack one self-contained dist/npm/qareel-<version>.tgz for this
+  --local  Pack one self-contained dist/npm/patrick-lai-qareel-<version>.tgz for this
            machine (binaries under vendor/, no optional dependencies), so
-           `npx ./dist/npm/qareel-<version>.tgz guide` works offline.
+           `npx ./dist/npm/patrick-lai-qareel-<version>.tgz guide` works offline.
 EOF
 }
 

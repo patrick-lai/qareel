@@ -308,4 +308,4 @@ jobs:
           for platform in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
             publish "qareel-$platform" "dist/npm/qareel-$platform-$VERSION.tgz"
           done
-          publish qareel "dist/npm/qareel-$VERSION.tgz"
+          publish @patrick-lai/qareel "dist/npm/patrick-lai-qareel-$VERSION.tgz"

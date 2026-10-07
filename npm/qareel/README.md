@@ -3,10 +3,10 @@
 Record polished, trustworthy QA demo videos of a web app from any coding agent.
 
 ```sh
-npx qareel@latest guide
+npx @patrick-lai/qareel@latest guide
 ```
 
-`guide` walks you through setup and your first recording. Install it for repeated use with `npm install -g qareel`, or without Node:
+`guide` walks you through setup and your first recording. Install it for repeated use with `npm install -g @patrick-lai/qareel`, or without Node:
 
 ```sh
 curl -fsSL https://github.com/patrick-lai/qareel/releases/latest/download/install.sh | sh

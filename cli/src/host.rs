@@ -171,7 +171,7 @@ impl Host {
         let log = std::fs::OpenOptions::new().create(true).append(true).open(&launch.log)?;
         let mut command = tokio::process::Command::new(&launch.program);
         command.args(&launch.args).env_clear().envs(launch.env.iter().map(|(key, value)| (key, value))).stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::from(log)).kill_on_drop(true);
-        let mut child = command.spawn().map_err(|error| fixable("browser.host_start", format!("the browser engine could not start: {error}"), "reinstall with `npx qareel@latest`, or set QAREEL_HOST to a working engine"))?;
+        let mut child = command.spawn().map_err(|error| fixable("browser.host_start", format!("the browser engine could not start: {error}"), "reinstall with `npx @patrick-lai/qareel@latest`, or set QAREEL_HOST to a working engine"))?;
         let (Some(mut stdin), Some(stdout)) = (child.stdin.take(), child.stdout.take()) else {
             return Err(fail("browser.host_start", "the browser engine has no stdio pipes"));
         };

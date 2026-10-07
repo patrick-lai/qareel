@@ -3,7 +3,7 @@
 Record polished, trustworthy QA demo videos of a web app from any coding agent.
 
 ```sh
-npx qareel@latest guide
+npx @patrick-lai/qareel@latest guide
 ```
 
 qareel drives a real WebKit browser, records it, and turns the recording into a 4K video with a title card, numbered caption pills and click marks. It enforces the discipline that makes the video evidence rather than a showreel: a written plan that can fail, captions that match the plan, every check reported with a time inside the video, and a recording bound to one git commit. `qareel demo finish` writes `demo.mp4` and `evidence.md`, a criteria table with timestamps that is ready to paste into a pull request.

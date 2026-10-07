@@ -115,7 +115,7 @@ pub fn host_binary() -> Result<PathBuf> {
     ["libexec/qareel-host", "host-macos/.build/release/qareel-host", "host-macos/.build/debug/qareel-host"]
         .into_iter()
         .find_map(search)
-        .ok_or_else(|| fixable("browser.host_missing", "the qareel browser engine is not installed next to this binary", "reinstall with `npx qareel@latest` or set QAREEL_HOST to a built qareel-host"))
+        .ok_or_else(|| fixable("browser.host_missing", "the qareel browser engine is not installed next to this binary", "reinstall with `npx @patrick-lai/qareel@latest` or set QAREEL_HOST to a built qareel-host"))
 }
 
 pub fn reel_dir() -> Result<PathBuf> {
@@ -126,5 +126,5 @@ pub fn reel_dir() -> Result<PathBuf> {
         .into_iter()
         .filter_map(search)
         .find(|root| root.join("reel.py").is_file() && root.join("reel_assets").is_dir())
-        .ok_or_else(|| fixable("reel.missing", "the video polisher is not installed next to this binary", "reinstall with `npx qareel@latest` or set QAREEL_REEL_DIR to a folder with reel.py and reel_assets"))
+        .ok_or_else(|| fixable("reel.missing", "the video polisher is not installed next to this binary", "reinstall with `npx @patrick-lai/qareel@latest` or set QAREEL_REEL_DIR to a folder with reel.py and reel_assets"))
 }

@@ -26,13 +26,13 @@ description: Record a QA demo video that proves a web change works, with caption
 
 # QA demo videos with qareel
 
-Run `npx qareel@latest guide` and follow it exactly. It explains the plan format, the recording steps and the rules that make the video trustworthy evidence.
+Run `npx @patrick-lai/qareel@latest guide` and follow it exactly. It explains the plan format, the recording steps and the rules that make the video trustworthy evidence.
 ";
 
 const AGENTS_SECTION: &str = "
 ## QA demo videos
 
-To QA a web change or attach video evidence to a pull request, run `npx qareel@latest guide` and follow it exactly.
+To QA a web change or attach video evidence to a pull request, run `npx @patrick-lai/qareel@latest guide` and follow it exactly.
 ";
 
 pub fn command_help(command: &str) -> String {
@@ -57,7 +57,7 @@ pub fn command_help(command: &str) -> String {
         "record" => "qareel record start [fps=30] | caption \"text\" | status [recording_id=ID] | stop [recording_id=ID]\nRecords the current tab. `qareel demo` drives this for you.",
         "demo" => "qareel demo plan --file plan.json   save the plan (or --file - for stdin)\nqareel demo start [URL]             bind the commit and start recording\nqareel demo shot N                  show shot N's caption and print its steps\nqareel demo check C OUTCOME \"evidence\"   report criterion C: passed, failed or not_checked\nqareel demo status                  show progress\nqareel demo finish [out=DIR]        stop, verify, polish; writes demo.mp4 and evidence.md",
         "reel" => "qareel reel compose|frame [reel.py flags]\nRuns the polish step by hand; see `qareel guide`.",
-        "init" => "qareel init --claude | --agents\n--claude writes .claude/skills/qareel/SKILL.md; --agents adds a QA demo section to AGENTS.md. Both point agents at `npx qareel@latest guide`.",
+        "init" => "qareel init --claude | --agents\n--claude writes .claude/skills/qareel/SKILL.md; --agents adds a QA demo section to AGENTS.md. Both point agents at `npx @patrick-lai/qareel@latest guide`.",
         "doctor" => "qareel doctor\nChecks the browser engine, ffmpeg and Python for the polish step.",
         "install" => "qareel install\nDownloads the Linux browser image (podman), then runs the doctor checks.",
         "stop" => "qareel stop\nStops the background session and its browser.",
@@ -86,7 +86,7 @@ pub fn init(params: &[String]) -> Result<i32> {
     if agents {
         let path = root.join("AGENTS.md");
         let existing = std::fs::read_to_string(&path).unwrap_or_default();
-        if existing.contains("qareel@latest guide") {
+        if existing.contains("@patrick-lai/qareel@latest guide") {
             println!("{} already mentions qareel", path.display());
         } else {
             std::fs::write(&path, format!("{}{}{AGENTS_SECTION}", existing, if existing.is_empty() || existing.ends_with('\n') { "" } else { "\n" }))?;
@@ -111,7 +111,7 @@ pub async fn doctor(install: bool) -> Result<i32> {
     let mut healthy = true;
     if cfg!(target_os = "macos") {
         let host = crate::paths::host_binary();
-        healthy &= line(host.as_ref().is_ok_and(|path| Path::new(path).is_file()), "browser engine (WebKit host)", "reinstall with `npx qareel@latest`");
+        healthy &= line(host.as_ref().is_ok_and(|path| Path::new(path).is_file()), "browser engine (WebKit host)", "reinstall with `npx @patrick-lai/qareel@latest`");
     } else if cfg!(target_os = "linux") {
         match find_executable("podman") {
             None => healthy &= line(false, "podman", "sudo apt install podman   # or your distribution's package manager"),
@@ -130,7 +130,7 @@ pub async fn doctor(install: bool) -> Result<i32> {
     }
     healthy &= line(crate::reel::tool("ffmpeg").is_ok() && crate::reel::tool("ffprobe").is_ok(), "ffmpeg and ffprobe", if cfg!(target_os = "macos") { "brew install ffmpeg" } else { "sudo apt install ffmpeg" });
     healthy &= line(find_executable("uv").is_some() || find_executable("python3").is_some(), "uv or python3 for the polish step", "curl -LsSf https://astral.sh/uv/install.sh | sh");
-    healthy &= line(crate::paths::reel_dir().is_ok(), "video polisher files", "reinstall with `npx qareel@latest`");
+    healthy &= line(crate::paths::reel_dir().is_ok(), "video polisher files", "reinstall with `npx @patrick-lai/qareel@latest`");
     println!("home {}", layout.root.display());
     Ok(if healthy { 0 } else { 1 })
 }

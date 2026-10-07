@@ -1,5 +1,5 @@
 {
-  "name": "qareel",
+  "name": "@patrick-lai/qareel",
   "version": "0.0.0",
   "description": "Record polished, trustworthy QA demo videos of a web app from any coding agent",
   "license": "MIT",

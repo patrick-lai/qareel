@@ -2,7 +2,7 @@
 
 qareel drives a real WebKit browser (the engine inside Safari), records it, and polishes the recording into a 4K demo video with a title card, numbered caption pills and crayon click marks. It also enforces what makes that video trustworthy evidence: a written plan that can fail, captions that match the plan, every check reported with a time inside the video, and a recording bound to one exact git commit.
 
-Below, `qareel` means however you started it: `npx qareel@latest` works anywhere with Node 18+, and `npm install -g qareel` puts `qareel` on PATH. Run every command from the repository you are testing. A background session starts on the first command, keeps the browser and its sign-ins between commands, and stops by itself after 15 idle minutes (`qareel stop` ends it now). Run `qareel doctor` once to check the machine: it needs ffmpeg and uv (or python3) for the polish step.
+Below, `qareel` means however you started it: `npx @patrick-lai/qareel@latest` works anywhere with Node 18+, and `npm install -g @patrick-lai/qareel` puts `qareel` on PATH. Run every command from the repository you are testing. A background session starts on the first command, keeps the browser and its sign-ins between commands, and stops by itself after 15 idle minutes (`qareel stop` ends it now). Run `qareel doctor` once to check the machine: it needs ffmpeg and uv (or python3) for the polish step.
 
 ## The workflow, in order
 
