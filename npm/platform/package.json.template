@@ -1,0 +1,23 @@
+{
+  "name": "qareel-@PLATFORM@",
+  "version": "@VERSION@",
+  "description": "The @PLATFORM@ binaries for qareel. Install qareel instead of this package.",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/patrick-lai/qareel.git"
+  },
+  "homepage": "https://github.com/patrick-lai/qareel",
+  "os": [
+    "@OS@"
+  ],
+  "cpu": [
+    "@CPU@"
+  ],
+  "files": [
+    "bin/",
+    "libexec/",
+    "share/"
+  ],
+  "preferUnplugged": true
+}

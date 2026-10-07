@@ -1,0 +1,61 @@
+{
+  "title": "Profile: display name survives reload",
+  "subtitle": "Saving a display name now persists it on the server",
+  "criteria": [
+    "Saving a new display name shows it in the page header",
+    "The saved display name is still shown after a full page reload",
+    "Risk: an empty display name is rejected with an error and not saved"
+  ],
+  "script": {
+    "changed_behaviors": [
+      "The profile form saves the display name through PUT /api/profile",
+      "The page header reads the display name from GET /api/profile on load"
+    ],
+    "risks": [
+      "The header updates from local state only, so the name is lost on reload",
+      "Validation exists only in the form, so an empty name reaches the server"
+    ],
+    "assumptions": [
+      "The development server seeds a signed-in user whose display name is Ada"
+    ],
+    "shots": [
+      {
+        "criterion": "Saving a new display name shows it in the page header",
+        "kind": "happy",
+        "surface": "browser",
+        "setup": "Open http://localhost:3000/profile; the header shows Ada",
+        "do": "Replace the Display name field with Grace Hopper and press Save",
+        "expect": "The header reads Grace Hopper and a Saved message appears",
+        "falsifier": "The header still reads Ada or no Saved message appears",
+        "capture": "Video of the header and form after Save",
+        "caption": "Saving a new name updates the header",
+        "est_seconds": 20
+      },
+      {
+        "criterion": "The saved display name is still shown after a full page reload",
+        "kind": "persistence",
+        "surface": "browser",
+        "setup": "Depends on shot 1: the name Grace Hopper was saved",
+        "do": "Reload the page with qareel reload",
+        "expect": "After reload the header and the field both read Grace Hopper",
+        "falsifier": "After reload the header or the field reads Ada",
+        "capture": "Video of the reloaded page",
+        "caption": "The new name survives a full reload",
+        "est_seconds": 15
+      },
+      {
+        "criterion": "Risk: an empty display name is rejected with an error and not saved",
+        "kind": "negative",
+        "surface": "browser",
+        "setup": "Depends on shot 2: the saved name is Grace Hopper",
+        "do": "Clear the Display name field, press Save, then reload the page",
+        "expect": "The form shows Display name is required, and after reload the header still reads Grace Hopper",
+        "falsifier": "No error appears, or after reload the header is empty",
+        "capture": "Video of the error message and of the header after reload",
+        "caption": "An empty name is rejected and nothing is saved",
+        "est_seconds": 25
+      }
+    ],
+    "not_demonstrable": []
+  }
+}

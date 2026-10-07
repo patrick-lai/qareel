@@ -1,0 +1,26 @@
+{
+  "name": "qareel",
+  "version": "0.0.0",
+  "description": "Record polished, trustworthy QA demo videos of a web app from any coding agent",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/patrick-lai/qareel.git"
+  },
+  "homepage": "https://github.com/patrick-lai/qareel",
+  "bin": {
+    "qareel": "bin/qareel.js"
+  },
+  "files": [
+    "bin/qareel.js"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "optionalDependencies": {
+    "qareel-darwin-arm64": "0.0.0",
+    "qareel-darwin-x64": "0.0.0",
+    "qareel-linux-x64": "0.0.0",
+    "qareel-linux-arm64": "0.0.0"
+  }
+}

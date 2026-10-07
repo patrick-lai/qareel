@@ -1,0 +1,24 @@
+ARG DEBIAN_IMAGE=docker.io/library/debian:testing-slim
+
+FROM ${DEBIAN_IMAGE} AS build
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        gcc libc6-dev pkg-config python3 \
+        libwpewebkit-2.0-dev libjson-glib-dev libcairo2-dev libpango1.0-dev \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+COPY host-linux/qareel-browser.c host-linux/qareel-recording.c host-linux/qareel-recording.h host-linux/native_webkit.py host-linux/
+RUN python3 host-linux/native_webkit.py build --output /out/qareel-browser
+
+FROM ${DEBIAN_IMAGE}
+RUN apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        libwpewebkit-2.0-1 libjson-glib-1.0-0 libcairo2 libpango-1.0-0 libpangocairo-1.0-0 \
+        bubblewrap xdg-dbus-proxy ca-certificates fonts-dejavu-core fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji \
+        gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav \
+        libegl1 libgles2 libgl1-mesa-dri libgbm1 \
+        ffmpeg pulseaudio dbus-daemon \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build --chmod=0755 /out/qareel-browser /usr/local/bin/qareel-browser
+ENV QAREEL_BROWSER_CONTAINER=1
+ENTRYPOINT ["/usr/local/bin/qareel-browser"]

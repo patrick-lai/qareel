@@ -1,0 +1,279 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build, sign and package everything, but do not push the image, create the release or publish to npm
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_TERM_COLOR: always
+  IMAGE: ghcr.io/patrick-lai/qareel-browser
+
+jobs:
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.plan.outputs.version }}
+      dry_run: ${{ steps.plan.outputs.dry_run }}
+      prerelease: ${{ steps.plan.outputs.prerelease }}
+      npm_tag: ${{ steps.plan.outputs.npm_tag }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: plan
+        env:
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[] | select(.name == "qareel") | .version')
+          case "$version" in
+            ''|*[!0-9A-Za-z.+-]*) echo "::error::Could not read the qareel version from Cargo.toml (got '$version')."; exit 1 ;;
+          esac
+          if [ "$REF_TYPE" = tag ] && [ "$REF_NAME" != "v$version" ]; then
+            echo "::error::Tag $REF_NAME does not match the Cargo version $version. Tag v$version instead, or bump the version."
+            exit 1
+          fi
+          dry_run=false
+          if [ "$DRY_RUN" = true ]; then dry_run=true; fi
+          if [ "$dry_run" = false ] && [ "$REF_TYPE" != tag ]; then
+            echo "::error::A real release must run from the v$version tag. Push the tag, or run with dry_run."
+            exit 1
+          fi
+          prerelease=false
+          npm_tag=latest
+          case "$version" in *-*) prerelease=true; npm_tag=next ;; esac
+          {
+            echo "version=$version"
+            echo "dry_run=$dry_run"
+            echo "prerelease=$prerelease"
+            echo "npm_tag=$npm_tag"
+          } >> "$GITHUB_OUTPUT"
+          echo "Releasing qareel $version (dry run: $dry_run, npm tag: $npm_tag)" >> "$GITHUB_STEP_SUMMARY"
+
+  image:
+    name: Linux browser image
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      reference: ${{ steps.reference.outputs.reference }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - if: needs.prepare.outputs.dry_run != 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: host-linux/Containerfile
+          platforms: linux/amd64,linux/arm64
+          tags: ${{ env.IMAGE }}:${{ needs.prepare.outputs.version }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/patrick-lai/qareel
+            org.opencontainers.image.version=${{ needs.prepare.outputs.version }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          outputs: type=image,push=${{ needs.prepare.outputs.dry_run != 'true' }}
+      - id: reference
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          if printf '%s' "$DIGEST" | grep -Eqx 'sha256:[0-9a-f]{64}'; then
+            reference="$IMAGE@$DIGEST"
+          elif [ "$DRY_RUN" = true ]; then
+            echo "::warning::The dry-run image build reported no digest; the Linux CLI is built against $IMAGE:$VERSION instead."
+            reference="$IMAGE:$VERSION"
+          else
+            echo "::error::The image push reported no digest (got '$DIGEST')."
+            exit 1
+          fi
+          echo "reference=$reference" >> "$GITHUB_OUTPUT"
+          echo "Linux browser image: \`$reference\`" >> "$GITHUB_STEP_SUMMARY"
+
+  build-macos:
+    name: Build ${{ matrix.platform }}
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: darwin-arm64
+            target: aarch64-apple-darwin
+          - platform: darwin-x64
+            target: x86_64-apple-darwin
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install stable --profile minimal --target ${{ matrix.target }} --no-self-update && rustup default stable
+      - run: scripts/build-dist.sh --target ${{ matrix.target }} --build-only
+      - name: Sign and notarize
+        env:
+          QAREEL_DRY_RUN: ${{ needs.prepare.outputs.dry_run }}
+          APPLE_DEVELOPER_ID_P12_BASE64: ${{ secrets.APPLE_DEVELOPER_ID_P12_BASE64 }}
+          APPLE_DEVELOPER_ID_P12_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_P12_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_NOTARY_KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          APPLE_NOTARY_ISSUER: ${{ secrets.APPLE_NOTARY_ISSUER }}
+          APPLE_NOTARY_KEY_P8_BASE64: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
+        run: >-
+          scripts/macos-sign.sh
+          dist/stage/${{ matrix.platform }}/qareel/bin/qareel
+          dist/stage/${{ matrix.platform }}/qareel/libexec/qareel-host
+      - run: scripts/build-dist.sh --target ${{ matrix.target }} --package-only
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-${{ matrix.platform }}
+          path: |
+            dist/qareel-${{ needs.prepare.outputs.version }}-${{ matrix.platform }}.tar.gz
+            dist/qareel-${{ needs.prepare.outputs.version }}-${{ matrix.platform }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  build-linux:
+    name: Build ${{ matrix.platform }}
+    needs: [prepare, image]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux-x64
+            target: x86_64-unknown-linux-musl
+          - platform: linux-arm64
+            target: aarch64-unknown-linux-musl
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      QAREEL_LINUX_IMAGE: ${{ needs.image.outputs.reference }}
+    steps:
+      - uses: actions/checkout@v7
+      - run: rustup toolchain install stable --profile minimal --target ${{ matrix.target }} --no-self-update && rustup default stable
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.17.0
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild@0.23.4
+      - run: scripts/build-dist.sh --target ${{ matrix.target }} --zig
+      - name: Check the CLI pins the browser image
+        run: grep -aqF "$QAREEL_LINUX_IMAGE" target/${{ matrix.target }}/release/qareel || { echo "::error::The Linux CLI does not embed $QAREEL_LINUX_IMAGE; it must read QAREEL_LINUX_IMAGE with option_env!."; exit 1; }
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-${{ matrix.platform }}
+          path: |
+            dist/qareel-${{ needs.prepare.outputs.version }}-${{ matrix.platform }}.tar.gz
+            dist/qareel-${{ needs.prepare.outputs.version }}-${{ matrix.platform }}.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish
+    needs: [prepare, image, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      id-token: write
+    env:
+      VERSION: ${{ needs.prepare.outputs.version }}
+      NPM_TAG: ${{ needs.prepare.outputs.npm_tag }}
+      PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Checksums
+        working-directory: dist
+        run: |
+          for sum in qareel-*.tar.gz.sha256; do sha256sum --check --strict "$sum"; done
+          sha256sum qareel-"$VERSION"-*.tar.gz > SHA256SUMS
+          test "$(wc -l < SHA256SUMS)" -eq 4
+          cat SHA256SUMS
+      - name: Pack npm packages
+        run: scripts/pack-npm.sh
+      - name: Check npm packages
+        run: for package in dist/npm/*.tgz; do npm publish "$package" --dry-run --access public --tag "$NPM_TAG"; done
+      - uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ needs.prepare.outputs.version }}
+          path: |
+            dist/SHA256SUMS
+            dist/npm/*.tgz
+          if-no-files-found: error
+          retention-days: 14
+      - name: Create GitHub release
+        if: needs.prepare.outputs.dry_run != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="v$VERSION"
+          draft=$(gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null || echo missing)
+          if [ "$draft" = false ]; then
+            gh release download "$tag" --pattern SHA256SUMS --output "$RUNNER_TEMP/published-SHA256SUMS"
+            if cmp -s "$RUNNER_TEMP/published-SHA256SUMS" dist/SHA256SUMS; then
+              echo "Release $tag is already published with these files."
+              exit 0
+            fi
+            echo "::error::Release $tag is already published with different files. Release a new version instead."
+            exit 1
+          fi
+          if [ "$draft" = missing ]; then
+            set -- --draft --verify-tag --title "qareel $VERSION" --generate-notes
+            if [ "$PRERELEASE" = true ]; then set -- "$@" --prerelease; fi
+            gh release create "$tag" "$@"
+          fi
+          gh release upload "$tag" dist/qareel-"$VERSION"-*.tar.gz dist/SHA256SUMS install.sh --clobber
+          gh release edit "$tag" --draft=false
+      - name: Publish npm packages
+        if: needs.prepare.outputs.dry_run != 'true'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          publish() {
+            published=$(npm view "$1@$VERSION" version 2>/dev/null || true)
+            if [ "$published" = "$VERSION" ]; then
+              echo "$1@$VERSION is already on npm."
+              return
+            fi
+            npm publish "$2" --provenance --access public --tag "$NPM_TAG"
+          }
+          for platform in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
+            publish "qareel-$platform" "dist/npm/qareel-$platform-$VERSION.tgz"
+          done
+          publish qareel "dist/npm/qareel-$VERSION.tgz"

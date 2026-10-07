@@ -1,0 +1,5 @@
+*
+!host-linux/qareel-browser.c
+!host-linux/qareel-recording.c
+!host-linux/qareel-recording.h
+!host-linux/native_webkit.py

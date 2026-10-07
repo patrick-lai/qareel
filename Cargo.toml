@@ -1,0 +1,14 @@
+[workspace]
+resolver = "3"
+members = ["protocol", "cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "UNLICENSED"
+repository = "https://github.com/patrick-lai/qareel"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true
