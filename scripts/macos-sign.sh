@@ -10,8 +10,8 @@ timestamp) from a temporary keychain, then notarizes them as one zip.
 
 Reads APPLE_DEVELOPER_ID_P12_BASE64, APPLE_DEVELOPER_ID_P12_PASSWORD,
 APPLE_SIGNING_IDENTITY, APPLE_NOTARY_KEY_ID, APPLE_NOTARY_ISSUER and
-APPLE_NOTARY_KEY_P8_BASE64 from the environment. With QAREEL_DRY_RUN=true and
-no signing identity configured, it warns and leaves the binaries unsigned.
+APPLE_NOTARY_KEY_P8_BASE64 from the environment. With none of them set, it
+warns and leaves the binaries with their linker signature; a partial set fails.
 EOF
 }
 
@@ -30,18 +30,18 @@ for binary in "$@"; do
 done
 
 missing=''
+present=''
 for name in APPLE_DEVELOPER_ID_P12_BASE64 APPLE_DEVELOPER_ID_P12_PASSWORD APPLE_SIGNING_IDENTITY \
     APPLE_NOTARY_KEY_ID APPLE_NOTARY_ISSUER APPLE_NOTARY_KEY_P8_BASE64; do
     eval "value=\${$name:-}"
-    [ -n "$value" ] || missing="$missing $name"
+    if [ -n "$value" ]; then present="$present $name"; else missing="$missing $name"; fi
 done
-if [ -n "$missing" ]; then
-    if [ "${QAREEL_DRY_RUN:-false}" = true ]; then
-        printf '::warning::Dry run without Apple signing secrets (%s); the macOS binaries are not signed or notarized.\n' "${missing# }"
-        exit 0
-    fi
-    fail "missing signing secrets:$missing"
+if [ -z "$present" ]; then
+    printf '::warning::No Apple signing secrets are configured; the macOS binaries keep their linker signature and are not notarized.\n'
+    exit 0
 fi
+[ -z "$missing" ] || fail "some Apple signing secrets are missing:$missing"
+
 
 work=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/qareel-sign.XXXXXX")
 keychain="$work/signing.keychain-db"
