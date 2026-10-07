@@ -89,6 +89,7 @@ mkdir -p "$main/bin"
 cp "$root/npm/qareel/bin/qareel.js" "$main/bin/qareel.js"
 chmod 0755 "$main/bin/qareel.js"
 cp "$root/npm/qareel/README.md" "$main/README.md"
+cp "$root/LICENSE" "$main/LICENSE"
 
 if [ "$local_mode" -eq 1 ]; then
     host=$(node -p 'process.platform + "-" + process.arch')
@@ -101,6 +102,7 @@ else
     for platform in $platforms; do
         package="$stage/qareel-$platform"
         extract "$platform" "$package"
+        cp "$root/LICENSE" "$package/LICENSE"
         node -e '
 const fs = require("node:fs");
 const [template, target, platform, version] = process.argv.slice(1);

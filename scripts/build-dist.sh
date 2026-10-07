@@ -117,6 +117,7 @@ if [ "$build" -eq 1 ]; then
     fi
     cp "$root/reel/reel.py" "$root/reel/reel_sound.py" "$tree/share/qareel/reel/"
     cp -R "$root/reel/reel_assets" "$tree/share/qareel/reel/reel_assets"
+    cp "$root/LICENSE" "$tree/LICENSE"
     find "$tree" \( -name __pycache__ -o -name '*.pyc' -o -name .DS_Store \) -prune -exec rm -rf {} +
     find "$tree" -type d -exec chmod 0755 {} +
     find "$tree" -type f -exec chmod 0644 {} +

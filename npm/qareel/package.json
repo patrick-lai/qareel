@@ -2,7 +2,7 @@
   "name": "qareel",
   "version": "0.0.0",
   "description": "Record polished, trustworthy QA demo videos of a web app from any coding agent",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/patrick-lai/qareel.git"
