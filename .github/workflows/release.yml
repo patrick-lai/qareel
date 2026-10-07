@@ -129,10 +129,13 @@ jobs:
             target: aarch64-apple-darwin
           - platform: darwin-x64
             target: x86_64-apple-darwin
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v7
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
       - run: rustup toolchain install stable --profile minimal --target ${{ matrix.target }} --no-self-update && rustup default stable
       - run: scripts/build-dist.sh --target ${{ matrix.target }} --build-only
       - name: Sign and notarize
