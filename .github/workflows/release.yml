@@ -47,6 +47,10 @@ jobs:
           case "$version" in
             ''|*[!0-9A-Za-z.+-]*) echo "::error::Could not read the qareel version from Cargo.toml (got '$version')."; exit 1 ;;
           esac
+          if ! grep -qF "version: StaticString = \"$version\"" host-macos/Sources/QareelEngine/Engine.swift; then
+            echo "::error::QareelEngine.version in host-macos/Sources/QareelEngine/Engine.swift does not match $version."
+            exit 1
+          fi
           if [ "$REF_TYPE" = tag ] && [ "$REF_NAME" != "v$version" ]; then
             echo "::error::Tag $REF_NAME does not match the Cargo version $version. Tag v$version instead, or bump the version."
             exit 1
@@ -150,6 +154,7 @@ jobs:
           scripts/macos-sign.sh
           dist/stage/${{ matrix.platform }}/qareel/bin/qareel
           dist/stage/${{ matrix.platform }}/qareel/libexec/qareel-host
+          dist/stage/${{ matrix.platform }}/qareel/lib/libQareelEngine.dylib
       - run: scripts/build-dist.sh --target ${{ matrix.target }} --package-only
       - uses: actions/upload-artifact@v7
         with:

@@ -1,4 +1,5 @@
 import AppKit
+import QareelEngine
 import Darwin
 
 signal(SIGPIPE, SIG_IGN)

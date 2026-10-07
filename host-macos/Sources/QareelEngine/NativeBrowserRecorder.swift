@@ -509,6 +509,8 @@ final class NativeBrowserRecorder {
     private var snapshotPending = false
     private var highlight: (CGRect, UInt64, UInt64, CGSize, Double)?
 
+    var recording: Bool { task != nil }
+
     init(directory: URL? = nil) { storage = NativeRecordingStorage(directory: directory ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".commission/native-browser-recordings", isDirectory: true)) }
     private var milliseconds: UInt64 { UInt64(max(0, (ProcessInfo.processInfo.systemUptime - started) * 1000)) }
 
