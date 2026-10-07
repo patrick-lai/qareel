@@ -146,3 +146,12 @@ fn arguments_take_refs_selectors_points_and_key_values() {
     let check = Spec { command: "demo", positional: &["action", "criterion", "outcome", "evidence"], strings: &["criterion"], values: &[], pointing: false };
     assert_eq!(parse(&check, &["check".to_owned(), "1".to_owned(), "passed".to_owned(), "observed 3".to_owned()]).expect("check")["criterion"], json!("1"));
 }
+
+#[test]
+fn fetched_json_hides_secrets_and_link_noise() {
+    let response = json!({"path": "/api/me?token=abc123&page=2", "status": 200, "status_text": "OK", "type": "application/json", "bytes": 90, "ms": 4, "body": r#"{"name":"Ada","accessToken":"tok-1","self":"http://x","nested":{"Client_Secret":"s"},"empty":""}"#});
+    let report = qareel::fetch::fetch_report("GET", &response, 4000, false);
+    assert!(report.contains(r#""accessToken":"[redacted]""#) && report.contains(r#""Client_Secret":"[redacted]""#), "{report}");
+    assert!(!report.contains("tok-1") && !report.contains("abc123") && !report.contains("\"self\"") && !report.contains("\"empty\""), "{report}");
+    assert!(report.contains("page=2"));
+}

@@ -4,13 +4,17 @@ pub mod client;
 pub mod demo;
 pub mod engine;
 pub mod failure;
+pub mod fetch;
 pub mod guide;
 pub mod host;
+pub mod look;
 pub mod paths;
 pub mod record;
 pub mod reel;
 pub mod script;
+pub mod scripts;
 pub mod serve;
+pub mod tools;
 
 use failure::{Failure, describe, fixable};
 use serve::{Request, Response};
@@ -119,6 +123,14 @@ pub async fn main(arguments: Vec<String>) -> i32 {
         "key" => "press",
         "wait_for" | "wait-for" => "wait",
         "fill_form" | "fill-form" => "fill",
+        "upload_file" | "upload-file" => "upload",
+        "network_requests" | "network-requests" | "requests" => "network",
+        "handle_dialog" | "handle-dialog" => "dialog",
+        "take_screenshot" | "take-screenshot" => "screenshot",
+        "select_option" | "select-option" => "select",
+        "press_key" | "press-key" => "press",
+        "console_messages" | "console-messages" => "console",
+        "navigate_back" | "navigate-back" => "back",
         other => other,
     };
     if params.iter().any(|param| param == "--help" || param == "-h") {

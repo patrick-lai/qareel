@@ -10,6 +10,12 @@ qareel drives a real WebKit browser, records it, and turns the recording into a 
 
 An agent needs no skill or plugin: `qareel guide` teaches the whole workflow, and every command's `--help` points back to it. Repositories that want a nudge can run `qareel init --claude` (writes `.claude/skills/qareel/SKILL.md`) or `qareel init --agents` (adds a section to `AGENTS.md`).
 
+## Parity with CommissionAI
+
+qareel ships the same WebKit recorder, page scripts and polish step as CommissionAI's QA demos, and the same generic browser tools: open, back, forward, reload, snapshot (with refs and diffs), click (left, right, middle, double), hover (including pointer-lock look), type, fill, select, press (keys, chords, held keys and a virtual gamepad), scroll (including pinch zoom), drag, upload and native file choosers, wait, eval (including inside iframes), screenshot, look, loop, resize, console, network, fetch, dialogs, tabs and popups, batch, and recording with captions and click marks.
+
+These stay in CommissionAI because they need its daemon: the goal-driven browser run, taught site skills, bookmarks, sign-in sync with devboxes, recording grants for other origins, publishing to Loom, Artifacts and pull requests, and the Jira board tab.
+
 ## Requirements
 
 - macOS 14 or later, or Linux with rootless podman (`qareel install` downloads the browser image).

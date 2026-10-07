@@ -1,6 +1,6 @@
 use crate::failure::{fail, fixable};
 use anyhow::{Result, anyhow};
-use qareel_protocol::{NativeBrowserHostMessage, NativeBrowserMessage, NativeBrowserOperation, NativeBrowserOutcome, NativeCapabilities, NativeCapability, NativeImplementation, NativePointerPhase, NativePresentation, NativeTabState};
+use qareel_protocol::{NativeBrowserHostMessage, NativeBrowserMessage, NativeBrowserOperation, NativeBrowserOutcome, NativeCapabilities, NativeCapability, NativeImplementation, NativePointerPhase, NativePopupIdentity, NativePresentation, NativeTabState};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::ffi::OsString;
@@ -29,6 +29,12 @@ pub struct Launch {
     pub log: PathBuf,
 }
 
+#[derive(Clone, Debug)]
+pub enum PopupEvent {
+    Opened { tab: String, identity: NativePopupIdentity, url: String },
+    Closed { tab: String, identity: NativePopupIdentity },
+}
+
 #[derive(Clone, Default)]
 pub struct Host {
     inner: Arc<Mutex<Inner>>,
@@ -42,6 +48,7 @@ struct Inner {
     tabs: HashMap<String, NativeTabState>,
     attempts: VecDeque<Instant>,
     exit: Option<String>,
+    popups: VecDeque<PopupEvent>,
 }
 
 struct Connection {
@@ -138,6 +145,10 @@ impl Host {
 
     pub fn clear_tab_state(&self, tab: &str) {
         self.locked().tabs.remove(tab);
+    }
+
+    pub fn take_popups(&self) -> Vec<PopupEvent> {
+        self.locked().popups.drain(..).collect()
     }
 
     pub fn require(&self, capability: NativeCapability) -> Result<()> {
@@ -256,6 +267,18 @@ impl Host {
                 NativeBrowserHostMessage::Tab { generation: received, tab_id, state } if received == generation && tab_id.len() <= 256 => {
                     self.locked().tabs.insert(tab_id, state);
                 }
+                NativeBrowserHostMessage::Popup { generation: received, instance_id, sequence, opener_id, tab_id, popup_id, state } if received == generation && tab_id.len() <= 256 => {
+                    let mut inner = self.locked();
+                    if inner.popups.len() < 64 && !inner.popups.iter().any(|event| matches!(event, PopupEvent::Opened { tab, .. } if *tab == tab_id)) {
+                        inner.popups.push_back(PopupEvent::Opened { tab: tab_id, identity: NativePopupIdentity { instance_id, sequence, opener_id, popup_id }, url: state.url });
+                    }
+                }
+                NativeBrowserHostMessage::PopupClosed { generation: received, instance_id, sequence, opener_id, tab_id, popup_id } if received == generation && tab_id.len() <= 256 => {
+                    let mut inner = self.locked();
+                    if inner.popups.len() < 64 && !inner.popups.iter().any(|event| matches!(event, PopupEvent::Closed { tab, .. } if *tab == tab_id)) {
+                        inner.popups.push_back(PopupEvent::Closed { tab: tab_id, identity: NativePopupIdentity { instance_id, sequence, opener_id, popup_id } });
+                    }
+                }
                 NativeBrowserHostMessage::Flush { generation: received, id } if received == generation => {
                     let Ok(reply) = serde_json::to_string(&NativeBrowserMessage::Flushed { generation: generation.clone(), id }) else { break "the flush reply could not be encoded".to_owned() };
                     let Some(sender) = outgoing.upgrade() else { break "the browser engine input closed".to_owned() };
@@ -290,6 +313,7 @@ impl Host {
         if inner.connection.as_ref().is_some_and(|connection| connection.generation == generation) {
             inner.connection = None;
             inner.tabs.clear();
+            inner.popups.clear();
         }
         let failed: Vec<String> = inner.pending.iter().filter(|(_, pending)| pending.generation == generation).map(|(id, _)| id.clone()).collect();
         for id in failed {
@@ -319,7 +343,7 @@ impl Host {
             return Err(fail("browser.invalid_tab", "tab identifiers are 1 to 128 characters"));
         }
         self.require(operation_capability(&operation))?;
-        let agent = !matches!(operation, NativeBrowserOperation::Ensure { .. } | NativeBrowserOperation::RecordingStop { .. } | NativeBrowserOperation::RecordingStatus { .. } | NativeBrowserOperation::RecordingRead { .. } | NativeBrowserOperation::RecordingRelease { .. });
+        let agent = !matches!(operation, NativeBrowserOperation::Ensure { .. } | NativeBrowserOperation::PopupDecision { .. } | NativeBrowserOperation::RecordingStop { .. } | NativeBrowserOperation::RecordingStatus { .. } | NativeBrowserOperation::RecordingRead { .. } | NativeBrowserOperation::RecordingRelease { .. });
         let (reply, result) = oneshot::channel();
         let id = {
             let mut inner = self.locked();

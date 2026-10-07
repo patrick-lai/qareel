@@ -39,7 +39,7 @@ struct Shared {
     shutdown: tokio::sync::Notify,
 }
 
-const RECORD: Spec = Spec { command: "record", positional: &["action", "text"], strings: &["action", "text", "caption", "caption_id", "recording_id"], values: &["fps", "max_duration_ms", "max_bytes", "max_dimension", "overlays"], pointing: false };
+const RECORD: Spec = Spec { command: "record", positional: &["action", "text"], strings: &["action", "text", "caption", "caption_id", "recording_id", "audio"], values: &["fps", "max_duration_ms", "max_bytes", "max_dimension", "overlays"], pointing: false };
 
 fn demo_spec(action: Option<&String>) -> Spec {
     let positional: &'static [&'static str] = match action.map(String::as_str) {

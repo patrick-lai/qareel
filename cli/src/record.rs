@@ -245,6 +245,14 @@ impl Session {
         let url = self.host.tab_state(&tab).map(|state| state.url).filter(|url| !url.is_empty()).unwrap_or_else(|| self.tabs.iter().find(|item| item.id == tab).map(|item| item.url.clone()).unwrap_or_default());
         let number = |key: &str, default: u64| args.get(key).and_then(Value::as_u64).unwrap_or(default);
         let overlay = |key: &str| args.get("overlays").and_then(|overlays| overlays.get(key)).and_then(Value::as_bool).unwrap_or(false);
+        let app_audio = self.host.advertises(qareel_protocol::NativeCapability::RecordingAudioApp);
+        let audio = match args.get("audio").and_then(Value::as_str) {
+            None => if app_audio { NativeRecordingAudio::App } else { NativeRecordingAudio::Off },
+            Some("off") => NativeRecordingAudio::Off,
+            Some("app") if app_audio => NativeRecordingAudio::App,
+            Some("app") => return Err(fixable("record.audio_unavailable", "this browser engine cannot capture page audio", "record without sound, or use the Linux engine, which captures app audio")),
+            Some(_) => return Err(fixable("args.invalid", "audio is off or app", "qareel record start audio=off")),
+        };
         let options = NativeRecordingOptions {
             scope: scope_for(&url)?,
             fps: number("fps", 30).clamp(1, 30) as u16,
@@ -252,7 +260,7 @@ impl Session {
             max_bytes: number("max_bytes", MAX_BYTES).clamp(1024 * 1024, MAX_BYTES),
             max_dimension: number("max_dimension", 1280).clamp(240, 1280) as u16,
             control_policy: NativeRecordingControlPolicy::Agent,
-            audio: NativeRecordingAudio::Off,
+            audio,
             overlays: NativeRecordingOverlays { cursor: overlay("cursor"), clicks: overlay("clicks"), captions: overlay("captions"), highlights: overlay("highlights") },
         };
         let viewport = self.host.call(&tab, NativeBrowserOperation::Evaluate { script: "[innerWidth, innerHeight]".to_owned() }, crate::host::CALL_TIMEOUT).await.ok().and_then(|value| value[0].as_f64().zip(value[1].as_f64())).unwrap_or((1280.0, 800.0));

@@ -148,7 +148,7 @@ final class StdioHost {
             self?.emitted(channel: channel, data: data)
         }
         self.engine = engine
-        scope = engine.openScope(id: "stdio", remote: false, recordingOwner: nil, popups: false)
+        scope = engine.openScope(id: "stdio", remote: false, recordingOwner: nil, popups: true)
     }
 
     func start() {

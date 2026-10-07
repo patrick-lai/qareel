@@ -82,3 +82,11 @@ fn unknown_commands_and_bad_plans_explain_the_fix() {
     let rejected = home.error(&["demo", "plan", "--file", plan.to_str().expect("utf-8 path")]);
     assert!(rejected.contains("error[demo.plan_invalid]") && rejected.contains("fix:"), "{rejected}");
 }
+
+#[test]
+fn a_batch_with_a_bad_step_runs_nothing() {
+    let home = Home::new();
+    let rejected = home.error(&["batch", r#"steps=[{"tool":"open","args":{"url":"http://localhost:9/x","wait_ready":0}},{"tool":"frobnicate","args":{}}]"#]);
+    assert!(rejected.contains("error[batch.invalid]") && rejected.contains("step 2"), "{rejected}");
+    assert!(home.ok(&["tabs"]).contains("No tabs are open"));
+}

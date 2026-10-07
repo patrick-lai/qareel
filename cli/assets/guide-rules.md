@@ -41,7 +41,11 @@ Targets: a ref from the latest `qareel snapshot` (`n12`), a CSS selector (`#save
 - `qareel eval "() => document.title"`, or with `selector=...` to receive the element.
 - `qareel screenshot [path=shot.png]`: prints where the PNG was saved; open it to look.
 - `qareel resize 1280 800`, `qareel resize reset=true`.
-- `qareel console start|read|stop`, `qareel dialog status|accept|dismiss`, `qareel tabs [new URL|select N|close N]`.
+- `qareel drag from_ref=n3 to_ref=n9`, `qareel upload fixtures/avatar.png`, `qareel dialog files='["report.pdf"]'` for a native file chooser.
+- `qareel network [failed=true]`, `qareel fetch /api/items` (same-site API calls with the page's session; secrets are redacted).
+- `qareel batch steps='[...]'` runs several steps in one call; every step is checked before any runs.
+- Canvas and games: `qareel look` (colour grid and objects), `qareel loop start code='(api, tick) => ...'`, `qareel press GamepadA`, `qareel hover dx=40 dy=0`, `qareel scroll dy=-120 zoom=true x=400 y=300`, `qareel eval "() => window.game.score" frame=game`.
+- `qareel console start|read|stop`, `qareel dialog status|accept|dismiss`, `qareel tabs [new URL|select N|close N]`. A window the page opens (for example a sign-in popup) becomes a new tab.
 
 ## Lower-level recording
 
