@@ -12,6 +12,7 @@ Start here:   qareel guide        the full workflow, plan format and rules
 Check setup:  qareel doctor
 
 Demo:     demo plan --file plan.json | demo start [URL] | demo shot N | demo check C OUTCOME EVIDENCE | demo status | demo finish
+Voice-over: demo script [afk=SECONDS] | demo wait | demo approve | demo revise --file plan.json | demo narrate
 Browser:  open URL | snapshot | click | type | fill | select | press | hover | scroll | drag | upload | wait | eval | screenshot | look | resize | back | forward | reload | console | network | fetch | dialog | tabs | batch | loop
 Record:   record start | record caption TEXT | record status | record stop
 Other:    reel compose|frame ... | init --claude --agents | doctor | install | stop | version
@@ -62,7 +63,14 @@ pub fn command_help(command: &str) -> String {
         "dialog" => "qareel dialog status | accept [text=...] | dismiss | files='[\"report.pdf\"]'\nAnswers an alert, confirm, prompt or file chooser the page opened.",
         "tabs" => "qareel tabs [list] | new [URL] | select N | close [N]\nLists and switches tabs.",
         "record" => "qareel record start [fps=30] [audio=off|app] | caption \"text\" | status [recording_id=ID] | stop [recording_id=ID]\nRecords the current tab. `qareel demo` drives this for you. Page audio is captured where the engine supports it (Linux).",
-        "demo" => "qareel demo plan --file plan.json   save the plan (or --file - for stdin)\nqareel demo start [URL]             bind the commit and start recording\nqareel demo shot N                  show shot N's caption and print its steps\nqareel demo check C OUTCOME \"evidence\"   report criterion C: passed, failed or not_checked\nqareel demo status                  show progress\nqareel demo finish [out=DIR]        stop, verify, polish; writes demo.mp4 and evidence.md",
+        "demo" => "qareel demo plan --file plan.json   save the plan (or --file - for stdin)\nqareel demo start [URL]             bind the commit and start recording\nqareel demo shot N                  show shot N's caption and print its steps\nqareel demo check C OUTCOME \"evidence\"   report criterion C: passed, failed or not_checked\nqareel demo status                  show progress\nqareel demo finish [out=DIR]        stop, verify, polish; writes demo.mp4 and evidence.md (with voice-over if the plan narrates)
+
+Voice-over (plans with narration):
+qareel demo script [afk=SECONDS]    write script.md, print it for the person to review (default 300 s, 0 = wait for ever)
+qareel demo wait [seconds=45]       wait for the person's reply; approves by itself once the waiting time is up
+qareel demo approve [by=NAME]       the person said the script is fine
+qareel demo revise --file plan.json replace the plan before recording; the script needs a new OK
+qareel demo narrate [voice=NAME] [engine=piper|say|espeak|command]   add the voice-over to a finished demo again",
         "reel" => "qareel reel compose|frame [reel.py flags]\nRuns the polish step by hand; see `qareel guide`.",
         "init" => "qareel init --claude | --agents\n--claude writes .claude/skills/qareel/SKILL.md; --agents adds a QA demo section to AGENTS.md. Both point agents at `npx @patrick-lai/qareel@latest guide`.",
         "doctor" => "qareel doctor\nChecks the browser engine, ffmpeg and Python for the polish step.",
@@ -112,6 +120,23 @@ fn line(ok: bool, what: &str, fix: &str) -> bool {
     ok
 }
 
+pub fn voice_note() -> String {
+    if std::env::var_os("QAREEL_TTS_COMMAND").is_some_and(|value| !value.is_empty()) {
+        return "ok   voice-over: your QAREEL_TTS_COMMAND".to_owned();
+    }
+    let piper = find_executable("piper").is_some() && crate::voice::piper_voice_installed();
+    if piper {
+        return "ok   voice-over: Piper".to_owned();
+    }
+    if find_executable("say").is_some() {
+        return "ok   voice-over: the Mac system voice (a Premium or Enhanced voice sounds best: System Settings > Accessibility > Spoken Content)".to_owned();
+    }
+    if find_executable("espeak-ng").is_some() || find_executable("espeak").is_some() {
+        return "note voice-over: only espeak, which sounds robotic. For a natural voice: pip install piper-tts and put a voice in ~/.qareel/voices".to_owned();
+    }
+    "note voice-over: no voice installed, so narrated demos get music only. For a natural voice: pip install piper-tts and put a voice (.onnx and .onnx.json from rhasspy/piper-voices) in ~/.qareel/voices".to_owned()
+}
+
 pub async fn doctor(install: bool) -> Result<i32> {
     let layout = crate::paths::Layout::current()?;
     layout.prepare()?;
@@ -138,6 +163,7 @@ pub async fn doctor(install: bool) -> Result<i32> {
     healthy &= line(crate::reel::tool("ffmpeg").is_ok() && crate::reel::tool("ffprobe").is_ok(), "ffmpeg and ffprobe", if cfg!(target_os = "macos") { "brew install ffmpeg" } else { "sudo apt install ffmpeg" });
     healthy &= line(find_executable("uv").is_some() || find_executable("python3").is_some(), "uv or python3 for the polish step", "curl -LsSf https://astral.sh/uv/install.sh | sh");
     healthy &= line(crate::paths::reel_dir().is_ok(), "video polisher files", "reinstall with `npx @patrick-lai/qareel@latest`");
+    println!("{}", voice_note());
     println!("home {}", layout.root.display());
     Ok(if healthy { 0 } else { 1 })
 }

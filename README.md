@@ -10,6 +10,23 @@ qareel drives a real WebKit browser, records it, and turns the recording into a 
 
 An agent needs no skill or plugin: `qareel guide` teaches the whole workflow, and every command's `--help` points back to it. Repositories that want a nudge can run `qareel init --claude` (writes `.claude/skills/qareel/SKILL.md`) or `qareel init --agents` (adds a section to `AGENTS.md`).
 
+## Voice-over
+
+Add `narration` to a plan's shots (and optionally `voiceover.intro` / `voiceover.outro`) and the finished video talks, over the ambient music qareel already generates (the music dips under the voice). The plan's script is shown to the person first, as Markdown, so they can change it before anything is recorded:
+
+```sh
+qareel demo plan --file plan.json   # plan with narration
+qareel demo script                  # writes script.md and prints it: show it to the person
+qareel demo wait                    # repeat while it says "still waiting"
+qareel demo approve                 # they said it is fine (or: qareel demo revise --file plan.json)
+qareel demo start                   # refuses until the script is approved
+qareel demo finish                  # polish, then voice-over; the silent cut is kept as demo.no-voice.mp4
+```
+
+If nobody replies within the waiting time (`afk=SECONDS` on `demo script`, default 300, `0` waits for ever), `demo wait` or `demo start` approves the script automatically and `evidence.md` says so, so an unattended run carries on. Narration describes what is being checked, never the result; a shot whose check fails or is not run keeps no narration in the video.
+
+Voices are local: the best installed Mac system voice, [Piper](https://github.com/OHF-Voice/piper1-gpl) with a voice in `~/.qareel/voices` (natural, works on Linux), espeak as a last resort, or any tool through `QAREEL_TTS_COMMAND` (reads the text on stdin, writes audio to `{out}`). `qareel doctor` reports which is in use; `qareel demo narrate` redoes the voice on a finished demo. Each line is trimmed, levelled and gently compressed, and the video stream is copied, not re-encoded, unless the voice outlasts the video (then the last frame is held). Plans without narration behave exactly as before.
+
 ## Parity with CommissionAI
 
 qareel ships the same WebKit recorder, page scripts and polish step as CommissionAI's QA demos, and the same generic browser tools: open, back, forward, reload, snapshot (with refs and diffs), click (left, right, middle, double), hover (including pointer-lock look), type, fill, select, press (keys, chords, held keys and a virtual gamepad), scroll (including pinch zoom), drag, upload and native file choosers, wait, eval (including inside iframes), screenshot, look, loop, resize, console, network, fetch, dialogs, tabs and popups, batch, and recording with captions and click marks.
@@ -29,7 +46,7 @@ These stay in CommissionAI because they need its daemon: the goal-driven browser
 | `cli/` | the `qareel` binary: session server, browser commands, recording, demo workflow, guide |
 | `host-macos/` | `qareel-host`, the WKWebView engine and H.264 recorder for macOS |
 | `host-linux/` | the WPE WebKit engine and its container image for Linux |
-| `reel/` | the polish step (`reel.py`), its fonts and tests |
+| `reel/` | the polish step (`reel.py`), the music and click sounds (`reel_sound.py`), the voice-over (`reel_voice.py`), fonts and tests |
 | `npm/`, `scripts/`, `install.sh` | distribution: npm packages with per-platform binaries, release tarballs |
 
 ## How it runs

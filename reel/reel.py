@@ -17,6 +17,7 @@ except ImportError:
     Image = ImageDraw = ImageFilter = ImageFont = None
 
 import reel_sound
+import reel_voice
 
 
 ASSETS = Path(__file__).resolve().parent / 'reel_assets'
@@ -879,10 +880,17 @@ def main():
         else:
             item.add_argument('--time', type=float, default=1.0)
             item.add_argument('--card', type=float)
+    item = commands.add_parser('voiceover')
+    item.add_argument('--video', required=True)
+    item.add_argument('--cues', required=True)
+    item.add_argument('--out', required=True)
+    item.add_argument('--engine', default=None)
+    item.add_argument('--ffmpeg', default='ffmpeg')
+    item.add_argument('--ffprobe', default='ffprobe')
     args = parser.parse_args()
     try:
-        print(json.dumps({'compose': compose, 'frame': frame}[args.command](args)))
-    except (ReelError, OSError, subprocess.SubprocessError, KeyError) as error:
+        print(json.dumps({'compose': compose, 'frame': frame, 'voiceover': reel_voice.voiceover}[args.command](args)))
+    except (ReelError, reel_voice.VoiceError, OSError, subprocess.SubprocessError, KeyError, ValueError) as error:
         print(f'reel: {error}', file=sys.stderr)
         return 1
     return 0

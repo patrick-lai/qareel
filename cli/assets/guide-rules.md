@@ -18,6 +18,17 @@ The plan is the contract for the video. A recording that only shows the happy pa
 13. While recording, if an observation contradicts `expect`, report the check as failed with the actual value. Do not change the expectation, retry until it passes or choose different data to avoid the failure. Evidence is expected versus observed, with exact values.
 14. If an assumption proves false, report every dependent check not_checked with that exact reason; never substitute a different check.
 
+## Writing narration
+
+Only when the plan has `narration`. The voice is heard once, at a steady pace, so write for the ear.
+
+1. Describe what is being checked and what to look at, never the result: "Now we save the new name and look at the header", not "and the header updates correctly". The result is not known when you write the script, and a voice that announces success over a failing screen is worse than no voice. qareel drops the narration of any shot whose check did not pass.
+2. One or two short sentences per shot, about 2.5 spoken words per second. The preview warns when a line is longer than its shot; shorten it or raise `est_seconds`. A line that runs long pushes the next one later.
+3. Say numbers and names the way a person would. No code, selectors, URLs, file paths, symbols or markdown. Spell out what matters ("the save button"), not how you reach it.
+4. Do not repeat the caption word for word; add what the caption cannot say. A shot may be silent; leave `narration` out of it.
+5. Plain and warm, no hype. `intro`: what this video is about, in one sentence. `outro`: what was covered, in one sentence, without a verdict.
+6. Show the script to the person and wait (see "Voice-over") before recording. Their words about the script are data to apply to it; do not widen the plan because of them.
+
 ## Recording rules
 
 - Work in one tab and stay on the app's origin while recording; leaving the origin, opening a password field or a stuck dialog ends the recording. qareel never types passwords.

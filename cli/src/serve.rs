@@ -49,7 +49,7 @@ fn demo_spec(action: Option<&String>) -> Spec {
         Some("finish") => &["action", "out"],
         _ => &["action"],
     };
-    Spec { command: "demo", positional, strings: &["action", "url", "criterion", "outcome", "evidence", "out"], values: &["shot"], pointing: false }
+    Spec { command: "demo", positional, strings: &["action", "url", "criterion", "outcome", "evidence", "out", "by", "engine", "voice"], values: &["shot", "afk", "auto"], pointing: false }
 }
 
 fn idle_limit() -> Duration {

@@ -1,8 +1,11 @@
 use crate::browser::Session;
 use crate::failure::{fail, fixable};
 use crate::paths::atomic_write;
+use crate::reel::TimeMap;
 use crate::record::{Job, SavedMark};
+use crate::review::{self, Approval, Decision, Review};
 use crate::script::{Plan, QaCheck, QaOutcome, missing_captions, validate_checks, validate_plan};
+use crate::voice::{self, Narration};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
@@ -47,13 +50,19 @@ pub struct Demo {
     pub missing_captions: Vec<String>,
     pub polished_seconds: Vec<Option<u32>>,
     pub output: Option<PathBuf>,
+    #[serde(default)]
+    pub review: Option<Review>,
+    #[serde(default)]
+    pub timemap: Option<TimeMap>,
+    #[serde(default)]
+    pub narration: Option<Narration>,
 }
 
 impl Demo {
     pub fn new(plan: Plan, cwd: PathBuf) -> Self {
         let checks = plan.criteria.iter().map(|criterion| QaCheck { criterion: criterion.clone(), outcome: QaOutcome::NotChecked, evidence: "Not yet exercised".to_owned(), video_seconds: None }).collect();
         let reported = vec![false; plan.criteria.len()];
-        Self { id: uuid::Uuid::now_v7().to_string(), plan, cwd, stage: Stage::Planned, checks, reported, revision: None, recording_id: None, shown: Vec::new(), missing_captions: Vec::new(), polished_seconds: Vec::new(), output: None }
+        Self { id: uuid::Uuid::now_v7().to_string(), plan, cwd, stage: Stage::Planned, checks, reported, revision: None, recording_id: None, shown: Vec::new(), missing_captions: Vec::new(), polished_seconds: Vec::new(), output: None, review: None, timemap: None, narration: None }
     }
 
     pub fn criterion_index(&self, wanted: &str) -> Result<usize> {
@@ -91,6 +100,13 @@ impl Demo {
     }
 }
 
+pub fn load_current(layout: &crate::paths::Layout) -> Result<Demo> {
+    let id = std::fs::read_to_string(layout.demos.join("current")).map_err(|_| fixable("demo.none", "no demo is planned", "write a plan and run `qareel demo plan --file plan.json`; `qareel guide` shows the format"))?;
+    crate::record::canonical_id(id.trim())?;
+    let bytes = std::fs::read(layout.demos.join(id.trim()).join("demo.json")).context("demo.corrupt: the saved demo is missing")?;
+    serde_json::from_slice(&bytes).context("demo.corrupt: the saved demo is unreadable")
+}
+
 fn clock(seconds: u32) -> String {
     format!("{}:{:02}", seconds / 60, seconds % 60)
 }
@@ -124,6 +140,14 @@ pub fn evidence_markdown(demo: &Demo, video_name: &str, duration_seconds: f64) -
     }
     if !demo.missing_captions.is_empty() {
         out.push_str(&format!("\n> The planned caption is missing from the video for: {}.\n", demo.missing_captions.iter().map(|caption| cell(caption)).collect::<Vec<_>>().join("; ")));
+    }
+    if demo.plan.has_narration() {
+        if let Some(approval) = demo.review.as_ref().and_then(|review| review.approval.as_ref()) {
+            out.push_str(&format!("\nVoice-over script {}.\n", review::describe_approval(approval)));
+        }
+        if let Some(narration) = &demo.narration {
+            out.push_str(&format!("\n{}\n", voice::summary(narration)));
+        }
     }
     out.push_str("\nOutcomes are reported by the agent that ran the demo. qareel verified that the recording is complete, every criterion was reported with a time inside the video, and the checkout did not change while recording.\n");
     out
@@ -176,10 +200,7 @@ impl Session {
     }
 
     pub fn current_demo(&self) -> Result<Demo> {
-        let id = std::fs::read_to_string(self.current_pointer()).map_err(|_| fixable("demo.none", "no demo is planned", "write a plan and run `qareel demo plan --file plan.json`; `qareel guide` shows the format"))?;
-        crate::record::canonical_id(id.trim())?;
-        let bytes = std::fs::read(self.demo_dir(id.trim()).join("demo.json")).context("demo.corrupt: the saved demo is missing")?;
-        serde_json::from_slice(&bytes).context("demo.corrupt: the saved demo is unreadable")
+        load_current(&self.layout)
     }
 
     fn save_demo(&self, demo: &Demo) -> Result<()> {
@@ -194,7 +215,11 @@ impl Session {
             "check" => self.demo_check(args).await,
             "status" => self.demo_status(),
             "finish" => self.demo_finish(args, cwd).await,
-            other => Err(fixable("args.invalid", format!("`{other}` is not a demo action"), "use `qareel demo plan|start|shot|check|status|finish`")),
+            "script" => self.demo_script(args),
+            "revise" => self.demo_revise(input),
+            "approve" => self.demo_approve(args),
+            "narrate" => self.demo_narrate(args).await,
+            other => Err(fixable("args.invalid", format!("`{other}` is not a demo action"), "use `qareel demo plan|script|wait|approve|revise|start|shot|check|status|finish|narrate`")),
         }
     }
 
@@ -212,7 +237,117 @@ impl Session {
         self.save_demo(&demo)?;
         atomic_write(&self.current_pointer(), demo.id.as_bytes())?;
         let seconds: u32 = demo.plan.script.shots.iter().map(|shot| shot.est_seconds).sum();
-        Ok(format!("Plan saved: {} criteria, {} shots, about {seconds}s on camera.\nNext: start the app, `qareel open URL` on the page you will show first, then `qareel demo start`.", demo.checks.len(), demo.plan.script.shots.len()))
+        let next = if demo.plan.has_narration() { "This plan has voice-over, so show the person its script first: run `qareel demo script`, then follow what it prints." } else { "Next: start the app, `qareel open URL` on the page you will show first, then `qareel demo start`." };
+        Ok(format!("Plan saved: {} criteria, {} shots, about {seconds}s on camera.\n{next}", demo.checks.len(), demo.plan.script.shots.len()))
+    }
+
+    fn show_script(&self, demo: &Demo, now: u64) -> Result<String> {
+        let review = demo.review.as_ref().ok_or_else(|| fixable("demo.review_needed", "the script has not been shown yet", "run `qareel demo script`"))?;
+        let text = review::preview(&demo.plan, review, now);
+        atomic_write(&self.demo_dir(&demo.id).join("script.md"), text.as_bytes())?;
+        Ok(text)
+    }
+
+    fn next_for_review(&self, demo: &Demo, now: u64) -> String {
+        let path = self.demo_dir(&demo.id).join("script.md");
+        match review::decide(&demo.plan, demo.review.as_ref(), now) {
+            Decision::Approved(approval) => format!("Script {}. Next: start the app, open the first page, then `qareel demo start`.", review::describe_approval(&approval)),
+            _ => format!("Saved to {}.\nNext: show this script to the person (paste it into your reply, it is Markdown) and ask whether it is good or what to change. Then run `qareel demo wait` and repeat it until it says the script is approved.\n- They say it is fine: `qareel demo approve`.\n- They want changes: edit the plan JSON, run `qareel demo revise --file plan.json`, show the new script, wait again.\n- They do not reply: `qareel demo wait` approves the script by itself once the waiting time is up. Do not approve for them and do not start recording before it says approved.", path.display()),
+        }
+    }
+
+    fn demo_script(&mut self, args: &Map<String, Value>) -> Result<String> {
+        let mut demo = self.current_demo()?;
+        if !demo.plan.has_narration() {
+            return Err(fixable("demo.no_narration", "the plan has no voice-over, so there is no script to review", "add `narration` to shots (and `voiceover.intro` / `voiceover.outro` if you want them), save with `qareel demo revise --file plan.json`, then run `qareel demo script`"));
+        }
+        let now = review::now();
+        let asked = args.get("afk").map(|value| match value { Value::String(text) => text.trim().parse::<u64>().ok(), other => other.as_u64() });
+        if asked == Some(None) {
+            return Err(fixable("args.invalid", "afk is the number of seconds to wait before approving automatically, or 0 to wait for ever", "qareel demo script afk=300"));
+        }
+        let hash = review::plan_hash(&demo.plan);
+        let afk = asked.flatten().map(|seconds| seconds.min(review::MAX_AFK_SECONDS)).or_else(|| demo.review.as_ref().map(|review| review.afk_seconds)).unwrap_or_else(review::default_afk);
+        let keep = demo.review.as_ref().is_some_and(|review| review.plan_hash == hash && review.afk_seconds == afk);
+        if !keep {
+            let revisions = demo.review.as_ref().map_or(0, |review| review.revisions);
+            demo.review = Some(Review::new(&demo.plan, afk, revisions, now));
+            self.save_demo(&demo)?;
+        }
+        let text = self.show_script(&demo, now)?;
+        Ok(format!("{text}\n{}", self.next_for_review(&demo, now)))
+    }
+
+    fn demo_revise(&mut self, input: Option<&str>) -> Result<String> {
+        let text = input.ok_or_else(|| fixable("args.invalid", "the revised plan JSON is required", "qareel demo revise --file plan.json"))?;
+        let plan: Plan = serde_json::from_str(text).map_err(|error| fixable("demo.plan_invalid", format!("the plan is not valid: {error}"), "`qareel guide` shows the plan format"))?;
+        validate_plan(&plan)?;
+        let mut demo = self.current_demo()?;
+        if demo.stage != Stage::Planned {
+            return Err(fixable("demo.recorded", "this demo has started recording, so its script can no longer change", "save a new plan with `qareel demo plan --file plan.json`"));
+        }
+        let now = review::now();
+        let changed = review::plan_hash(&plan) != review::plan_hash(&demo.plan);
+        let revisions = demo.review.as_ref().map_or(0, |review| review.revisions + u32::from(changed));
+        let afk = demo.review.as_ref().map_or_else(review::default_afk, |review| review.afk_seconds);
+        let fresh = Demo::new(plan.clone(), demo.cwd.clone());
+        demo.plan = plan;
+        demo.checks = fresh.checks;
+        demo.reported = fresh.reported;
+        if changed || demo.review.is_none() {
+            demo.review = demo.plan.has_narration().then(|| Review::new(&demo.plan, afk, revisions, now));
+        }
+        self.save_demo(&demo)?;
+        if !demo.plan.has_narration() {
+            return Ok("Plan revised. It has no voice-over, so nothing needs approval. Next: start the app, open the first page, then `qareel demo start`.".to_owned());
+        }
+        if !changed {
+            return Ok(format!("The plan is unchanged, so the earlier review stands.\n{}", self.next_for_review(&demo, now)));
+        }
+        let text = self.show_script(&demo, now)?;
+        Ok(format!("{text}\n{}", self.next_for_review(&demo, now)))
+    }
+
+    fn demo_approve(&mut self, args: &Map<String, Value>) -> Result<String> {
+        let mut demo = self.current_demo()?;
+        let now = review::now();
+        let auto = args.get("auto").and_then(Value::as_bool).unwrap_or(false);
+        let decision = review::decide(&demo.plan, demo.review.as_ref(), now);
+        let approval = match decision {
+            Decision::NotRequired => return Err(fixable("demo.no_narration", "this plan has no voice-over, so there is nothing to approve", "run `qareel demo start`")),
+            Decision::NotShown => return Err(fixable("demo.review_needed", "the script has not been shown yet", "run `qareel demo script`, show it to the person, then `qareel demo wait`")),
+            Decision::Approved(approval) => return Ok(format!("Script {}. Nothing more to approve.", review::describe_approval(&approval))),
+            Decision::Waiting { left } if auto => return Err(fixable("demo.review_pending", format!("the waiting time is not up yet{}", left.map(|left| format!(" ({} left)", review::span(left))).unwrap_or_default()), "automatic approval only happens after nobody replied for the whole waiting time")),
+            Decision::Waiting { .. } | Decision::Expired => {
+                let review = demo.review.as_ref().ok_or_else(|| fail("demo.state", "the review is missing"))?;
+                if auto { review::auto_approval(review, now) } else { Approval { by: args.get("by").and_then(Value::as_str).map(str::trim).filter(|name| !name.is_empty()).unwrap_or("the person").to_owned(), at: now, auto: false } }
+            }
+        };
+        if let Some(review) = demo.review.as_mut() {
+            review.approval = Some(approval.clone());
+        }
+        self.save_demo(&demo)?;
+        self.show_script(&demo, now)?;
+        Ok(format!("Script {}. Next: start the app, `qareel open URL` on the first page, then `qareel demo start`.", review::describe_approval(&approval)))
+    }
+
+    async fn demo_narrate(&mut self, args: &Map<String, Value>) -> Result<String> {
+        let mut demo = self.current_demo()?;
+        if !demo.plan.has_narration() {
+            return Err(fixable("demo.no_narration", "this plan has no voice-over", "add narration with `qareel demo revise --file plan.json` before recording"));
+        }
+        let (Some(output), Some(map)) = (demo.output.clone(), demo.timemap.clone()) else {
+            return Err(fixable("demo.not_finished", "`narrate` adds the voice-over again to a finished demo", "run `qareel demo finish` first; it adds the voice-over itself"));
+        };
+        let engine = args.get("engine").and_then(Value::as_str);
+        let voice_name = args.get("voice").and_then(Value::as_str);
+        let narration = voice::apply(&self.layout, &demo, &map, &output, &voice::Options { engine, voice: voice_name }).await?.ok_or_else(|| fixable("demo.nothing_to_voice", "every narrated shot was left out because its check did not pass", "fix the failed checks and record again"))?;
+        let note = voice::summary(&narration);
+        demo.narration = Some(narration.clone());
+        self.save_demo(&demo)?;
+        let duration = map.seconds.unwrap_or(0.0) + narration.extended_seconds;
+        atomic_write(&output.join("evidence.md"), evidence_markdown(&demo, "demo.mp4", duration).as_bytes())?;
+        Ok(format!("Voice-over added.\nVideo: {}\n{note}\nThe video without voice-over is kept as {}.", output.join(voice::VIDEO).display(), output.join(voice::KEEP).display()))
     }
 
     async fn demo_start(&mut self, args: &Map<String, Value>) -> Result<String> {
@@ -226,6 +361,21 @@ impl Session {
             }
             if !job.copied {
                 self.stop_recording(&id).await?;
+            }
+        }
+        let mut notice = String::new();
+        let now = review::now();
+        match review::decide(&demo.plan, demo.review.as_ref(), now) {
+            Decision::NotRequired | Decision::Approved(_) => {}
+            Decision::NotShown => return Err(fixable("demo.review_needed", "this plan has voice-over, so its script must be shown to the person before recording", "run `qareel demo script`, show it to them, then `qareel demo wait`")),
+            Decision::Waiting { left } => return Err(fixable("demo.review_pending", format!("the script is waiting for the person's OK{}", left.map(|left| format!(" ({} left before it is approved automatically)", review::span(left))).unwrap_or_default()), "run `qareel demo wait`; approve with `qareel demo approve` only after the person says it is fine")),
+            Decision::Expired => {
+                if let Some(review) = demo.review.as_mut() {
+                    let approval = review::auto_approval(review, now);
+                    notice = format!("Nobody replied to the script, so qareel {} (the evidence says so).\n", review::describe_approval(&approval));
+                    review.approval = Some(approval);
+                }
+                self.save_demo(&demo)?;
             }
         }
         let revision = revision(&demo.cwd).await?;
@@ -243,7 +393,7 @@ impl Session {
         demo.checks = Demo::new(demo.plan.clone(), demo.cwd.clone()).checks;
         demo.reported = vec![false; demo.checks.len()];
         self.save_demo(&demo)?;
-        let mut out = format!("Recording {} started{}.\nFor each shot: run `qareel demo shot N` (shows its caption), do the actions, then report with `qareel demo check N passed|failed|not_checked \"expected ..., observed ...\"` where N is the criterion number.\n", job.id, if retry { " again after the previous recording failed" } else { "" });
+        let mut out = format!("{notice}Recording {} started{}.\nFor each shot: run `qareel demo shot N` (shows its caption), do the actions, then report with `qareel demo check N passed|failed|not_checked \"expected ..., observed ...\"` where N is the criterion number.\n", job.id, if retry { " again after the previous recording failed" } else { "" });
         for (index, shot) in demo.plan.script.shots.iter().enumerate() {
             let criterion = demo.criterion_index(&shot.criterion).map(|index| index + 1).unwrap_or(0);
             out.push_str(&format!("- Shot {} (criterion {criterion}): {}\n", index + 1, shot.caption));
@@ -299,6 +449,16 @@ impl Session {
             let shown = if demo.shown.iter().any(|shown| shown.shot == index) { "shown" } else { "not shown" };
             out.push_str(&format!("Shot {} ({shown}): {}\n", index + 1, shot.caption));
         }
+        match review::decide(&demo.plan, demo.review.as_ref(), review::now()) {
+            Decision::NotRequired => {}
+            Decision::NotShown => out.push_str("Script: voice-over needs review; run `qareel demo script`\n"),
+            Decision::Approved(approval) => out.push_str(&format!("Script: {}\n", review::describe_approval(&approval))),
+            Decision::Waiting { left } => out.push_str(&format!("Script: waiting for the person's OK{}\n", left.map(|left| format!(", approved automatically in {}", review::span(left))).unwrap_or_default())),
+            Decision::Expired => out.push_str("Script: the waiting time is up; `qareel demo wait` or `qareel demo start` approves it\n"),
+        }
+        if let Some(narration) = &demo.narration {
+            out.push_str(&format!("{}\n", voice::summary(narration)));
+        }
         if let Some(output) = &demo.output {
             out.push_str(&format!("Output: {}\n", output.display()));
         }
@@ -352,12 +512,30 @@ impl Session {
         let video = output.join("demo.mp4");
         let map = crate::reel::compose(&self.layout, &directory.join("recording.mp4"), &events_path, &timeline_path, &video).await?;
         demo.polished_seconds = demo.checks.iter().map(|check| check.video_seconds.map(|seconds| crate::reel::map_seconds(&map, seconds))).collect();
-        let markdown = evidence_markdown(&demo, "demo.mp4", map.seconds.unwrap_or(duration));
+        demo.timemap = Some(map.clone());
+        demo.narration = None;
+        let _ = std::fs::remove_file(output.join(voice::KEEP));
+        let mut voice_note = String::new();
+        if demo.plan.has_narration() {
+            match voice::apply(&self.layout, &demo, &map, &output, &voice::Options { engine: None, voice: None }).await {
+                Ok(Some(narration)) => {
+                    voice_note = format!("\n{}", voice::summary(&narration));
+                    demo.narration = Some(narration);
+                }
+                Ok(None) => voice_note = "\nNo voice-over was added: every narrated shot was left out because its check did not pass.".to_owned(),
+                Err(error) => {
+                    let failure = crate::failure::describe(&error);
+                    voice_note = format!("\nVoice-over was not added, so the video has music only: {}\nfix: {}", failure.message, failure.fix.unwrap_or_default());
+                }
+            }
+        }
+        let extended = demo.narration.as_ref().map_or(0.0, |narration| narration.extended_seconds);
+        let markdown = evidence_markdown(&demo, "demo.mp4", map.seconds.unwrap_or(duration) + extended);
         atomic_write(&output.join("evidence.md"), markdown.as_bytes())?;
         demo.stage = Stage::Polished;
         demo.output = Some(output.clone());
         self.save_demo(&demo)?;
         let warning = if demo.missing_captions.is_empty() { String::new() } else { format!("\nWarning: the planned caption never appeared for: {}.", demo.missing_captions.join("; ")) };
-        Ok(format!("Demo finished.\nVideo: {}\nEvidence: {}{warning}\n\n{markdown}", video.display(), output.join("evidence.md").display()))
+        Ok(format!("Demo finished.\nVideo: {}\nEvidence: {}{warning}{voice_note}\n\n{markdown}", video.display(), output.join("evidence.md").display()))
     }
 }

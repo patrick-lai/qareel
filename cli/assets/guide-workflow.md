@@ -28,5 +28,23 @@ If the recording fails (zero frames, the engine stopped, the page left its origi
 - `script.shots` (1 to 40): each has `criterion` (exact text from `criteria`), `kind` (happy, boundary, negative, persistence, regression or permission), `surface` (browser, api, cli or data), `setup`, `do`, `expect`, `falsifier`, `capture`, `caption` (under 160 bytes, shown on screen) and `est_seconds` (3 to 120; all shots together at most 300).
 - `script.not_demonstrable` (optional): `{"item": "exact criterion or risk", "reason": "why the live app cannot show it"}`.
 
-Example:
+- `narration` (optional, on a shot, under 600 bytes): what the voice says over that shot. `voiceover` (optional): `intro` (said over the title card), `outro` (said before the video ends) and `voice` (a voice name; omit it for the best voice on the machine). See "Voice-over" below.
 
+## Voice-over: script first, then the person's OK, then recording
+
+Add `narration` to the plan when the video should talk. qareel then adds a calm voice-over to the video, on top of the ambient music it already generates (the music dips under the voice). No other setup is needed on a Mac. Because a voice can say things a caption cannot, the person sees the script before anything is recorded:
+
+1. Save the plan with narration as usual: `qareel demo plan --file plan.json`.
+2. `qareel demo script` writes `script.md` (a Markdown preview: every shot with its narration, how long each line takes to say, and timing warnings) and prints it. Paste that Markdown into your reply, ask whether it is good or what to change, and say how long you will wait. `qareel demo script afk=600` sets the waiting time in seconds (default 300; `afk=0` waits for ever).
+3. `qareel demo wait` waits up to 45 seconds and says what to do next. Run it again while it says the script is still waiting. Between runs, read anything the person wrote:
+   - They say it is fine: `qareel demo approve` (add `by="Their Name"`).
+   - They want changes: edit the plan JSON, run `qareel demo revise --file plan.json`, show the new script and wait again. A changed script always needs a new OK.
+   - They do not reply: when the waiting time is up, `qareel demo wait` (or `qareel demo start`) approves the script by itself and `evidence.md` says it was approved automatically. This is what lets an unattended run carry on. Never approve for the person yourself, and never skip the wait.
+4. Record as usual from step 3 of the workflow (`qareel demo start` refuses until the script is approved). `qareel demo finish` polishes the video and then speaks the narration over it; it also keeps the version without voice as `demo.no-voice.mp4`.
+5. If `demo finish` says the voice-over was not added (no voice engine installed), install one (`qareel doctor` says how), then run `qareel demo narrate`. It re-voices the finished demo without recording again. `qareel demo narrate voice="Name"` picks another voice, and `engine=piper|say|espeak|command` another engine.
+
+Voices: on a Mac qareel uses the best installed system voice (an Ava, Zoe or Evan "Premium" or "Enhanced" voice sounds best; add one in System Settings > Accessibility > Spoken Content > System Voice > Manage Voices). On Linux install Piper (`pip install piper-tts`) and put a voice (`.onnx` and `.onnx.json`) in `~/.qareel/voices`. To use any other speech tool, set `QAREEL_TTS_COMMAND` to a command that reads the text on standard input and writes audio to `{out}`. The text is spoken on this machine unless that command sends it elsewhere.
+
+Narration is written before the app is exercised, so it can only describe what is about to be checked. If a shot's check fails or is not run, qareel leaves that shot's narration out of the video and says so in the evidence.
+
+Example:

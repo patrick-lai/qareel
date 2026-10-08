@@ -11,10 +11,12 @@ pub mod look;
 pub mod paths;
 pub mod record;
 pub mod reel;
+pub mod review;
 pub mod script;
 pub mod scripts;
 pub mod serve;
 pub mod tools;
+pub mod voice;
 
 use failure::{Failure, describe, fixable};
 use serve::{Request, Response};
@@ -60,6 +62,14 @@ async fn remote(command: &str, mut params: Vec<String>) -> anyhow::Result<i32> {
         }
         None => Err(failure::fail("serve.unavailable", "the qareel session is not running")),
     }
+}
+
+async fn wait(params: &[String]) -> anyhow::Result<i32> {
+    let layout = paths::Layout::current()?;
+    layout.prepare()?;
+    let (text, code) = review::wait(&layout, params).await?;
+    println!("{text}");
+    Ok(code)
 }
 
 async fn stop() -> anyhow::Result<i32> {
@@ -142,7 +152,13 @@ pub async fn main(arguments: Vec<String>) -> i32 {
         print_failure(&Failure::new("args.unknown_command", format!("`{command}` is not a qareel command")).with_fix("run `qareel --help`, or `qareel guide` for the QA demo workflow"));
         return 2;
     }
-    let outcome = if LOCAL.contains(&command) { local(command, params).await } else { remote(command, params.to_vec()).await };
+    let outcome = if LOCAL.contains(&command) {
+        local(command, params).await
+    } else if command == "demo" && params.first().is_some_and(|action| action == "wait") {
+        wait(params).await
+    } else {
+        remote(command, params.to_vec()).await
+    };
     match outcome {
         Ok(code) => code,
         Err(error) => {

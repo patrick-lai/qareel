@@ -104,7 +104,7 @@ if [ "$build" -eq 1 ]; then
         lipo "$host" -verify_arch "$swift_arch" || fail "$host is not built for $swift_arch."
     fi
 
-    for file in reel.py reel_sound.py reel_assets; do
+    for file in reel.py reel_sound.py reel_voice.py reel_assets; do
         [ -e "$root/reel/$file" ] || fail "missing reel/$file."
     done
 
@@ -115,7 +115,7 @@ if [ "$build" -eq 1 ]; then
         mkdir -p "$tree/libexec"
         cp "$host" "$tree/libexec/qareel-host"
     fi
-    cp "$root/reel/reel.py" "$root/reel/reel_sound.py" "$tree/share/qareel/reel/"
+    cp "$root/reel/reel.py" "$root/reel/reel_sound.py" "$root/reel/reel_voice.py" "$tree/share/qareel/reel/"
     cp -R "$root/reel/reel_assets" "$tree/share/qareel/reel/reel_assets"
     cp "$root/LICENSE" "$tree/LICENSE"
     find "$tree" \( -name __pycache__ -o -name '*.pyc' -o -name .DS_Store \) -prune -exec rm -rf {} +

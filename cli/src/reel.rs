@@ -20,12 +20,16 @@ pub struct TimeMap {
     pub seconds: Option<f64>,
 }
 
-pub fn map_seconds(map: &TimeMap, seconds: u32) -> u32 {
+pub fn map_time(map: &TimeMap, seconds: f64) -> f64 {
     let fps = u64::from(map.fps.max(1));
     let lead = (map.lead_gap * fps as f64).round() as u64;
-    let frame = (u64::from(seconds) * fps).saturating_sub(lead);
+    let frame = ((seconds.max(0.0) * fps as f64).floor() as u64).saturating_sub(lead);
     let held: u64 = map.holds.iter().filter(|(at, _)| *at < frame).map(|(_, count)| count).sum();
-    ((frame + held) as f64 / fps as f64 + map.intro_seconds).floor() as u32
+    (frame + held) as f64 / fps as f64 + map.intro_seconds
+}
+
+pub fn map_seconds(map: &TimeMap, seconds: u32) -> u32 {
+    map_time(map, f64::from(seconds)).floor() as u32
 }
 
 fn install_hint(tool: &str) -> String {
@@ -45,14 +49,14 @@ pub fn tool(name: &str) -> Result<PathBuf> {
     find_executable(name).ok_or_else(|| fixable("reel.ffmpeg_missing", format!("polishing the video needs {name}, which is not on PATH"), install_hint("ffmpeg")))
 }
 
-async fn run(program: &Path, args: &[String], limit: Duration) -> Result<std::process::Output> {
+pub(crate) async fn run(program: &Path, args: &[String], limit: Duration) -> Result<std::process::Output> {
     let mut command = tokio::process::Command::new(program);
     command.args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).kill_on_drop(true);
     let child = command.spawn().with_context(|| format!("reel.start: could not run {}", program.display()))?;
     tokio::time::timeout(limit, child.wait_with_output()).await.map_err(|_| fail("reel.timeout", format!("{} did not finish within {} minutes", program.display(), limit.as_secs() / 60)))?.map_err(Into::into)
 }
 
-fn tail(bytes: &[u8]) -> String {
+pub(crate) fn tail(bytes: &[u8]) -> String {
     let text = String::from_utf8_lossy(bytes);
     let lines: Vec<&str> = text.lines().filter(|line| !line.trim().is_empty()).collect();
     lines[lines.len().saturating_sub(6)..].join("\n").chars().take(1500).collect()

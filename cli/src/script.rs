@@ -53,6 +53,8 @@ pub struct QaShot {
     pub capture: String,
     pub caption: String,
     pub est_seconds: u32,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub narration: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -74,6 +76,17 @@ pub struct QaScript {
     pub not_demonstrable: Vec<QaUnverified>,
 }
 
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Voiceover {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub intro: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outro: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voice: Option<String>,
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Plan {
@@ -82,6 +95,40 @@ pub struct Plan {
     pub subtitle: Option<String>,
     pub criteria: Vec<String>,
     pub script: QaScript,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voiceover: Option<Voiceover>,
+}
+
+const NARRATION_LIMIT: usize = 600;
+const WORDS_PER_SECOND: f64 = 2.5;
+const SPEECH_PADDING: f64 = 0.4;
+
+pub fn speech_seconds(text: &str) -> f64 {
+    let words = text.split_whitespace().count() as f64;
+    let pauses = text.chars().filter(|character| matches!(character, '.' | '!' | '?' | ';' | ':')).count() as f64 * 0.25;
+    words / WORDS_PER_SECOND + pauses + SPEECH_PADDING
+}
+
+fn spoken(value: &Option<String>) -> Option<&str> {
+    value.as_deref().map(str::trim).filter(|text| !text.is_empty())
+}
+
+impl Plan {
+    pub fn shot_narration(&self, index: usize) -> Option<&str> {
+        spoken(&self.script.shots.get(index)?.narration)
+    }
+
+    pub fn intro_narration(&self) -> Option<&str> {
+        spoken(&self.voiceover.as_ref()?.intro)
+    }
+
+    pub fn outro_narration(&self) -> Option<&str> {
+        spoken(&self.voiceover.as_ref()?.outro)
+    }
+
+    pub fn has_narration(&self) -> bool {
+        self.intro_narration().is_some() || self.outro_narration().is_some() || (0..self.script.shots.len()).any(|index| self.shot_narration(index).is_some())
+    }
 }
 
 fn invalid(message: impl Into<String>) -> anyhow::Error {
@@ -93,7 +140,29 @@ pub fn validate_plan(plan: &Plan) -> Result<()> {
         return Err(invalid("give a title under 120 bytes (for example the ticket key or change name) and an optional subtitle under 200 bytes"));
     }
     validate_criteria(&plan.criteria)?;
-    validate_script(&plan.criteria, &plan.script)
+    validate_script(&plan.criteria, &plan.script)?;
+    validate_voiceover(plan)
+}
+
+fn validate_voiceover(plan: &Plan) -> Result<()> {
+    let too_long = |text: &str| text.len() > NARRATION_LIMIT;
+    let mut lines: Vec<(&str, &str)> = plan.script.shots.iter().filter_map(|shot| shot.narration.as_deref().map(|text| (shot.caption.as_str(), text))).collect();
+    if let Some(voiceover) = &plan.voiceover {
+        lines.extend(voiceover.intro.as_deref().map(|text| ("the intro", text)));
+        lines.extend(voiceover.outro.as_deref().map(|text| ("the outro", text)));
+        if voiceover.voice.as_ref().is_some_and(|voice| voice.trim().is_empty() || voice.len() > 80) {
+            return Err(invalid("voiceover.voice names a voice in under 80 bytes, or leave it out for the default"));
+        }
+    }
+    for (place, text) in lines {
+        if text.trim().is_empty() || too_long(text) {
+            return Err(invalid(format!("narration must be non-empty and under {NARRATION_LIMIT} bytes; check the narration for {place}")));
+        }
+    }
+    if !plan.has_narration() && plan.voiceover.is_some() {
+        return Err(invalid("voiceover is set but nothing is narrated; add narration to a shot, an intro or an outro, or remove voiceover"));
+    }
+    Ok(())
 }
 
 pub fn validate_criteria(criteria: &[String]) -> Result<()> {

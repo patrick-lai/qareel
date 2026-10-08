@@ -2,8 +2,9 @@ use qareel::args::{Spec, parse};
 use qareel::demo::{Demo, evidence_markdown, merged_events};
 use qareel::failure::describe;
 use qareel::record::{Job, SavedMark, validate_status};
-use qareel::reel::{TimeMap, map_seconds};
-use qareel::script::{Plan, QaCheck, QaOutcome, QaShotKind, missing_captions, validate_checks, validate_plan};
+use qareel::reel::{TimeMap, map_seconds, map_time};
+use qareel::review::{Decision, Review, auto_approval, decide, plan_hash, preview, warnings};
+use qareel::script::{Plan, QaCheck, QaOutcome, QaShotKind, Voiceover, missing_captions, speech_seconds, validate_checks, validate_plan};
 use qareel_protocol::{NativeRecordingAudio, NativeRecordingAudioStatus, NativeRecordingControlPolicy, NativeRecordingOptions, NativeRecordingOverlays, NativeRecordingPhase, NativeRecordingScope, NativeRecordingStatus};
 use serde_json::json;
 use std::path::PathBuf;
@@ -154,4 +155,152 @@ fn fetched_json_hides_secrets_and_link_noise() {
     assert!(report.contains(r#""accessToken":"[redacted]""#) && report.contains(r#""Client_Secret":"[redacted]""#), "{report}");
     assert!(!report.contains("tok-1") && !report.contains("abc123") && !report.contains("\"self\"") && !report.contains("\"empty\""), "{report}");
     assert!(report.contains("page=2"));
+}
+
+fn narrated() -> Plan {
+    let mut plan = example();
+    let lines = ["Now we save a new display name and watch the header.", "Next we reload the page and look for the name again.", "Last we clear the field, save, and see whether the form pushes back."];
+    for (shot, line) in plan.script.shots.iter_mut().zip(lines) {
+        shot.narration = Some(line.to_owned());
+    }
+    plan.voiceover = Some(Voiceover { intro: Some("This is a quick check of the display name change.".to_owned()), outro: Some("That covers the three checks.".to_owned()), voice: None });
+    plan
+}
+
+#[test]
+fn narration_is_optional_and_a_plan_without_it_is_unchanged() {
+    let plan = example();
+    assert!(!plan.has_narration());
+    let text = serde_json::to_string(&plan).expect("plan serializes");
+    assert!(!text.contains("narration") && !text.contains("voiceover"), "{text}");
+    validate_plan(&narrated()).expect("a narrated plan is valid");
+    assert!(narrated().has_narration());
+}
+
+#[test]
+fn bad_narration_is_rejected_with_a_fix() {
+    let mut long = narrated();
+    long.script.shots[0].narration = Some("word ".repeat(200));
+    assert!(rejection(&long).contains("under 600 bytes"));
+
+    let mut blank = narrated();
+    blank.script.shots[1].narration = Some("   ".to_owned());
+    assert!(rejection(&blank).contains("non-empty"));
+
+    let mut nothing = example();
+    nothing.voiceover = Some(Voiceover::default());
+    assert!(rejection(&nothing).contains("nothing is narrated"));
+
+    let mut voice = narrated();
+    voice.voiceover.as_mut().expect("voiceover").voice = Some("x".repeat(100));
+    assert!(rejection(&voice).contains("voiceover.voice"));
+}
+
+#[test]
+fn longer_speech_takes_longer_to_say() {
+    assert!(speech_seconds("Save the name.") < speech_seconds("Save the new display name, then reload the page and look again."));
+    assert!(speech_seconds("One. Two. Three.") > speech_seconds("One Two Three"));
+}
+
+#[test]
+fn a_plan_without_voice_over_never_needs_review_and_a_narrated_one_always_does() {
+    assert_eq!(decide(&example(), None, 100), Decision::NotRequired);
+    assert_eq!(decide(&narrated(), None, 100), Decision::NotShown);
+}
+
+#[test]
+fn nobody_replying_approves_the_script_exactly_when_the_waiting_time_is_up() {
+    let plan = narrated();
+    let review = Review::new(&plan, 300, 0, 1000);
+    assert_eq!(decide(&plan, Some(&review), 1000), Decision::Waiting { left: Some(300) });
+    assert_eq!(decide(&plan, Some(&review), 1299), Decision::Waiting { left: Some(1) });
+    assert_eq!(decide(&plan, Some(&review), 1300), Decision::Expired);
+    let approval = auto_approval(&review, 1300);
+    assert!(approval.auto && approval.by.contains("5 min"), "{approval:?}");
+    let mut approved = review.clone();
+    approved.approval = Some(approval.clone());
+    assert_eq!(decide(&plan, Some(&approved), 99_999), Decision::Approved(approval));
+}
+
+#[test]
+fn a_waiting_time_of_zero_waits_for_ever() {
+    let plan = narrated();
+    let review = Review::new(&plan, 0, 0, 1000);
+    assert_eq!(decide(&plan, Some(&review), 1000 + 10_000_000), Decision::Waiting { left: None });
+}
+
+#[test]
+fn changing_the_script_after_approval_asks_again() {
+    let plan = narrated();
+    let mut review = Review::new(&plan, 300, 0, 1000);
+    review.approval = Some(auto_approval(&review, 1300));
+    let mut edited = plan.clone();
+    edited.script.shots[0].narration = Some("A different sentence entirely.".to_owned());
+    assert_ne!(plan_hash(&plan), plan_hash(&edited));
+    assert_eq!(decide(&edited, Some(&review), 1301), Decision::NotShown);
+}
+
+#[test]
+fn the_preview_is_a_readable_script_with_timing_warnings() {
+    let mut plan = narrated();
+    plan.script.shots[1].narration = None;
+    plan.script.shots[2].narration = Some("This line is far too long to say in a shot that was only planned for a few seconds, so the voice would run into whatever comes next.".to_owned());
+    plan.script.shots[2].est_seconds = 5;
+    let review = Review::new(&plan, 300, 0, 1000);
+    let text = preview(&plan, &review, 1000);
+    assert!(text.starts_with("# Script review: Profile: display name survives reload"));
+    assert!(text.contains("waiting for your OK") && text.contains("approved automatically in 5 min"));
+    assert!(text.contains("> 🎙 Now we save a new display name and watch the header."));
+    assert!(text.contains("> 🎙 This is a quick check") && text.contains("> 🎙 That covers the three checks."));
+    assert!(text.contains("No voice-over: this shot is silent"));
+    assert!(text.contains("## Shot 3: An empty name is rejected and nothing is saved"));
+    assert!(text.contains("Timing to fix") && text.contains("Shot 3 narration takes about"), "{text}");
+    assert_eq!(warnings(&plan).len(), 1);
+    assert!(warnings(&narrated()).is_empty(), "{:?}", warnings(&narrated()));
+}
+
+#[test]
+fn an_approved_preview_says_who_approved_it() {
+    let plan = narrated();
+    let mut review = Review::new(&plan, 300, 2, 1000);
+    review.approval = Some(auto_approval(&review, 1300));
+    let text = preview(&plan, &review, 1300);
+    assert!(text.contains("Status: approved automatically by qareel") && text.contains("Revision 3"), "{text}");
+}
+
+fn map() -> TimeMap {
+    TimeMap { fps: 30, intro_seconds: 2.0, lead_gap: 0.1, holds: vec![(60, 30), (300, 15)], seconds: None }
+}
+
+#[test]
+fn fractional_times_agree_with_the_whole_second_mapping() {
+    let map = map();
+    for seconds in 0..30u32 {
+        assert_eq!(map_time(&map, f64::from(seconds)).floor() as u32, map_seconds(&map, seconds), "second {seconds}");
+    }
+    let mut last = 0.0;
+    for tenth in 0..300 {
+        let mapped = map_time(&map, f64::from(tenth) / 10.0);
+        assert!(mapped >= last, "time went backwards at {tenth}");
+        last = mapped;
+    }
+    assert!((map_time(&map, 1.0) - (2.0 + (30.0 - 3.0) / 30.0)).abs() < 1e-9);
+    assert!((map_time(&map, 5.0) - (2.0 + (150.0 - 3.0 + 30.0) / 30.0)).abs() < 1e-9);
+}
+
+#[test]
+fn a_shots_voice_lands_just_after_its_caption_and_a_failed_or_missing_shot_stays_silent() {
+    let plan = narrated();
+    let mut demo = Demo::new(plan.clone(), PathBuf::from("/work"));
+    demo.shown = vec![qareel::demo::Shown { shot: 0, time_ms: 1000 }, qareel::demo::Shown { shot: 1, time_ms: 9000 }];
+    demo.report(0, QaOutcome::Passed, "expected Grace, observed Grace", Some(1)).expect("first check");
+    demo.report(1, QaOutcome::Failed, "expected Grace, observed Ada", Some(9)).expect("second check");
+    let cues = qareel::voice::cues(&demo, &map());
+    let ids: Vec<&str> = cues.lines.iter().map(|line| line["id"].as_str().expect("id")).collect();
+    assert_eq!(ids, ["intro", "shot-1", "outro"]);
+    assert_eq!(cues.lines[0]["at"], json!(0.5));
+    let expected = map_time(&map(), 1.0) + 0.4;
+    assert!((cues.lines[1]["at"].as_f64().expect("time") - expected).abs() < 0.001, "{:?}", cues.lines[1]);
+    assert_eq!(cues.lines[2]["end"], json!(true));
+    assert_eq!(cues.omitted, vec!["shot 2 (its check failed)".to_owned(), "shot 3 (its caption was never shown)".to_owned()]);
 }
