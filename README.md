@@ -12,7 +12,7 @@ An agent needs no skill or plugin: `qareel guide` teaches the whole workflow, an
 
 ## Voice-over
 
-Add `narration` to a plan's shots (and optionally `voiceover.intro` / `voiceover.outro`) and the finished video talks, over the ambient music qareel already generates (the music dips under the voice). The plan's script is shown to the person first, as Markdown, so they can change it before anything is recorded:
+Add `narration` to a plan's shots (and optionally `voiceover.intro` / `voiceover.outro`) and the finished video talks over its click sounds. Reels have no background music unless `reel compose` gets `--music random` or a track number (0-19); music dips under the voice. The plan's script is shown to the person first, as Markdown, so they can change it before anything is recorded:
 
 ```sh
 qareel demo plan --file plan.json   # plan with narration

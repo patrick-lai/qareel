@@ -32,7 +32,7 @@ If the recording fails (zero frames, the engine stopped, the page left its origi
 
 ## Voice-over: script first, then the person's OK, then recording
 
-Add `narration` to the plan when the video should talk. qareel then adds a calm voice-over to the video, on top of the ambient music it already generates (the music dips under the voice). No other setup is needed on a Mac. Because a voice can say things a caption cannot, the person sees the script before anything is recorded:
+Add `narration` to the plan when the video should talk. qareel then adds a calm voice-over to the video, on top of its click sounds. No other setup is needed on a Mac. Because a voice can say things a caption cannot, the person sees the script before anything is recorded:
 
 1. Save the plan with narration as usual: `qareel demo plan --file plan.json`.
 2. `qareel demo script` writes `script.md` (a Markdown preview: every shot with its narration, how long each line takes to say, and timing warnings) and prints it. Paste that Markdown into your reply, ask whether it is good or what to change, and say how long you will wait. `qareel demo script afk=600` sets the waiting time in seconds (default 300; `afk=0` waits for ever).

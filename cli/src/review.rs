@@ -140,7 +140,7 @@ pub fn preview(plan: &Plan, review: &Review, now: u64) -> String {
         out.push_str(&format!("- Proves: {}\n- Do: {}\n- Expect: {}\n- Broken if: {}\n- Planned length: {}s\n\n", shot.criterion, shot.action, shot.expect, shot.falsifier, shot.est_seconds));
         match plan.shot_narration(index) {
             Some(text) => out.push_str(&format!("{}\n\n_About {:.0}s spoken._\n\n", quote(text), speech_seconds(text))),
-            None => out.push_str("_No voice-over: this shot is silent apart from the music._\n\n"),
+            None => out.push_str("_No voice-over: this shot is silent apart from its clicks._\n\n"),
         }
     }
     out.push_str("## Outro\n\n");
