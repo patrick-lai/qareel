@@ -32,6 +32,14 @@ class MusicTests(unittest.TestCase):
         self.assertLess(float(np.abs(quiet[:RATE // 10]).max()), float(np.abs(quiet[5 * RATE:6 * RATE]).max()) / 4)
         self.assertLess(float(np.abs(quiet[-RATE // 10:]).max()), float(np.abs(quiet[5 * RATE:6 * RATE]).max()) / 4)
 
+    def test_without_music_only_the_clicks_sound(self):
+        clicked = reel_sound.render(10.0, [4.0], None, RATE)
+        sounding = np.flatnonzero(np.abs(clicked).max(axis=1) > 0)
+        self.assertAlmostEqual(sounding[0] / RATE, 4.0, delta=0.01)
+        self.assertLess(sounding[-1] / RATE, 4.2)
+        self.assertGreater(float(np.abs(clicked).max()), 0.1)
+        self.assertEqual(float(np.abs(reel_sound.render(10.0, [], None, RATE)).max()), 0.0)
+
 
 if __name__ == '__main__':
     unittest.main()

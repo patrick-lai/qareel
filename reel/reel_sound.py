@@ -148,11 +148,14 @@ def click_sound(seed, rate=SAMPLE_RATE):
 
 def render(seconds, clicks, track, rate=SAMPLE_RATE):
     total = int(math.ceil(seconds * rate))
-    loop = render_loop(track, rate)
-    repeats = -(-total // len(loop))
-    mix = np.tile(loop, (repeats, 1))[:total].copy()
-    t = np.arange(total) / rate
-    mix *= (smooth(t / FADE_IN) * smooth((seconds - t) / FADE_OUT))[:, None]
+    if track is None:
+        mix = np.zeros((total, 2), np.float32)
+    else:
+        loop = render_loop(track, rate)
+        repeats = -(-total // len(loop))
+        mix = np.tile(loop, (repeats, 1))[:total].copy()
+        t = np.arange(total) / rate
+        mix *= (smooth(t / FADE_IN) * smooth((seconds - t) / FADE_OUT))[:, None]
     for number, when in enumerate(clicks):
         start = int(round(when * rate))
         sound = click_sound(100 + number % 5, rate)

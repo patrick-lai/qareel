@@ -799,13 +799,11 @@ def compose(args):
         raise ReelError('The recording is too long to compose (limit one hour).')
     audio = args.video if not holds and has_audio(args.video, args.ffprobe) else None
     track = pick_music(args.music)
-    clicks = click_times(timeline, reel.plan) if track is not None else []
+    clicks = click_times(timeline, reel.plan)
     seconds = (intro_frames + outro_frames + reel.plan['extra_frames'] + int(round(duration * FPS))) / FPS
     with tempfile.TemporaryDirectory() as scratch:
-        sound = None
-        if track is not None:
-            sound = Path(scratch) / 'sound.wav'
-            reel_sound.write_wav(sound, reel_sound.render(seconds, clicks, track))
+        sound = Path(scratch) / 'sound.wav'
+        reel_sound.write_wav(sound, reel_sound.render(seconds, clicks, track))
         return encode(args, reel, canvas, timeline, (intro_frames, outro_frames), holds, audio, sound, track)
 
 
@@ -876,7 +874,7 @@ def main():
         if name == 'compose':
             item.add_argument('--crf', type=int, default=17)
             item.add_argument('--preset', default='medium')
-            item.add_argument('--music', default='random')
+            item.add_argument('--music', default='off')
         else:
             item.add_argument('--time', type=float, default=1.0)
             item.add_argument('--card', type=float)

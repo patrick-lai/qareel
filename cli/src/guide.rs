@@ -134,7 +134,7 @@ pub fn voice_note() -> String {
     if find_executable("espeak-ng").is_some() || find_executable("espeak").is_some() {
         return "note voice-over: only espeak, which sounds robotic. For a natural voice: pip install piper-tts and put a voice in ~/.qareel/voices".to_owned();
     }
-    "note voice-over: no voice installed, so narrated demos get music only. For a natural voice: pip install piper-tts and put a voice (.onnx and .onnx.json from rhasspy/piper-voices) in ~/.qareel/voices".to_owned()
+    "note voice-over: no voice installed, so narrated demos have no voice. For a natural voice: pip install piper-tts and put a voice (.onnx and .onnx.json from rhasspy/piper-voices) in ~/.qareel/voices".to_owned()
 }
 
 pub async fn doctor(install: bool) -> Result<i32> {

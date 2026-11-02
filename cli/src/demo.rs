@@ -525,7 +525,7 @@ impl Session {
                 Ok(None) => voice_note = "\nNo voice-over was added: every narrated shot was left out because its check did not pass.".to_owned(),
                 Err(error) => {
                     let failure = crate::failure::describe(&error);
-                    voice_note = format!("\nVoice-over was not added, so the video has music only: {}\nfix: {}", failure.message, failure.fix.unwrap_or_default());
+                    voice_note = format!("\nVoice-over was not added, so the video has no voice: {}\nfix: {}", failure.message, failure.fix.unwrap_or_default());
                 }
             }
         }
